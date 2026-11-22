@@ -1,0 +1,373 @@
+using System.Numerics;
+using Rehearsal.UI;
+using Rehearsal.UI.Timeline;
+
+namespace Rehearsal.Tests;
+
+public sealed class SettingsTests : IDisposable
+{
+    private readonly string path = Path.Combine(Path.GetTempPath(), $"RehearsalSettings-{Guid.NewGuid():N}.json");
+
+    public void Dispose()
+    {
+        File.Delete(path);
+    }
+
+    [Fact]
+    public void Settings_SurviveARoundTrip()
+    {
+        var settings = new Settings
+        {
+            OverlayLocked = false,
+            SetupDone = true,
+            ShowOnEnemyTarget = true,
+            View = TimelineView.Automatic,
+            ShowAlways = true,
+            TrackDungeons = true,
+            Layout = TimelineLayoutMode.Inline,
+            IconSize = 64f,
+            CompactIconSize = 32f,
+            Accent = new Vector3(0.9f, 0.4f, 0.2f),
+            CooldownBadges = CooldownBadgeMode.All,
+            BurstCallouts = BurstCallouts.OneAndTwoMinute,
+            KeybindStyle = KeybindStyle.Compact,
+            HintSource = HintSource.Gamepad,
+            MistakeFeedback = FeedbackStyle.Strong,
+            MistakeSound = 11,
+            StopAtFirstMistake = true,
+            CountdownSeconds = 12
+        };
+        settings.Selected["BLM"] = new SavedSelection { Name = "Standard (The Balance)", IsDefault = true };
+        settings.Selected["BLM@90"] = new SavedSelection { Name = "Endwalker", IsDefault = false };
+        settings.LearnedBases[25797] = 141;
+
+        settings.Save(path);
+        var loaded = Settings.Load(path, (message, ex) => Assert.Fail($"{message}: {ex.Message}"));
+
+        Assert.False(loaded.OverlayLocked);
+        Assert.True(loaded.SetupDone);
+        Assert.True(loaded.ShowOnEnemyTarget);
+        Assert.Equal(TimelineView.Automatic, loaded.View);
+        Assert.True(loaded.ShowAlways);
+        Assert.True(loaded.TrackDungeons);
+        Assert.Equal(TimelineLayoutMode.Inline, loaded.Layout);
+        Assert.Equal(64f, loaded.IconSize);
+        Assert.Equal(32f, loaded.CompactIconSize);
+        Assert.Equal(new Vector3(0.9f, 0.4f, 0.2f), loaded.Accent);
+        Assert.Equal(CooldownBadgeMode.All, loaded.CooldownBadges);
+        Assert.Equal(BurstCallouts.OneAndTwoMinute, loaded.BurstCallouts);
+        Assert.Equal(KeybindStyle.Compact, loaded.KeybindStyle);
+        Assert.Equal(HintSource.Gamepad, loaded.HintSource);
+        Assert.Equal(FeedbackStyle.Strong, loaded.MistakeFeedback);
+        Assert.Equal(11, loaded.MistakeSound);
+        Assert.True(loaded.StopAtFirstMistake);
+        Assert.Equal(12, loaded.CountdownSeconds);
+        Assert.Equal("Standard (The Balance)", loaded.Selected["BLM"].Name);
+        Assert.Equal("Endwalker", loaded.Selected["BLM@90"].Name);
+        Assert.Equal(141u, loaded.LearnedBases[25797]);
+        Assert.Equal(Settings.CurrentVersion, loaded.Version);
+    }
+
+    [Fact]
+    public void Defaults_AreQuietAndStayOutOfTheWay()
+    {
+        var settings = Settings.Load(path);
+
+        Assert.True(settings.OverlayEnabled);
+        Assert.False(settings.AbilityAnts);
+        Assert.Equal(FeedbackStyle.Gentle, settings.MistakeFeedback);
+        Assert.Equal(0, settings.MistakeSound);
+        Assert.False(settings.ShowAlways);
+        Assert.True(settings.ShowAtDummy);
+        Assert.False(settings.TrackDungeons);
+        Assert.True(settings.TrackRaids);
+        Assert.True(settings.AutoAdjustLevel);
+    }
+
+    [Fact]
+    public void ANewInstall_IsTheSmallStrip_LockedAndOnlyWhereItIsWanted()
+    {
+        var settings = Settings.Load(path);
+
+        // The small side-scrolling strip, shown, and click-through from the first moment.
+        Assert.Equal(TimelineView.Compact, settings.View);
+        Assert.Equal(TimelinePresence.Shown, settings.Presence);
+        Assert.True(settings.OverlayLocked);
+
+        // Before the pull: at a dummy and inside trials and raids, not for every mob that gets clicked.
+        Assert.True(settings.ShowAtDummy);
+        Assert.True(settings.ShowInBossDuties);
+        Assert.False(settings.ShowOnEnemyTarget);
+        Assert.False(settings.ShowAlways);
+
+        // And the setup has yet to be offered.
+        Assert.False(settings.SetupDone);
+    }
+
+    [Fact]
+    public void TheCompactStrip_StartsWithEverythingThatHelpsAndNothingElse()
+    {
+        var style = new Settings().ToStyle(1f, true);
+
+        Assert.True(style.Compact);
+        Assert.True(style.ShowHints);
+        Assert.True(style.ShowStatus);
+        Assert.Equal(CooldownBadgeMode.Burst, style.Badges);
+        Assert.Equal(BurstCallouts.Off, style.Callouts);
+        Assert.Equal(TimelineLayoutMode.Inline, style.Layout);
+    }
+
+    [Fact]
+    public void BrokenFile_IsReportedAndGivesDefaults()
+    {
+        File.WriteAllText(path, "{ definitely not json");
+        var errors = 0;
+
+        var loaded = Settings.Load(path, (_, _) => errors++);
+
+        Assert.Equal(1, errors);
+        Assert.Equal(48f, loaded.IconSize);
+    }
+
+    [Fact]
+    public void OutOfRangeValues_AreClampedOnLoad()
+    {
+        File.WriteAllText(path, """{ "Version": 3, "IconSize": 9000, "PanelOpacity": -3, "CountdownSeconds": 0, "MistakeSound": 99, "Selected": null }""");
+
+        var loaded = Settings.Load(path);
+
+        Assert.Equal(96f, loaded.IconSize);
+        Assert.Equal(0f, loaded.PanelOpacity);
+        Assert.Equal(3, loaded.CountdownSeconds);
+        Assert.Equal(16, loaded.MistakeSound);
+        Assert.NotNull(loaded.Selected);
+    }
+
+    [Fact]
+    public void BrokenSelections_AreDroppedOnLoad()
+    {
+        File.WriteAllText(path, """{ "Version": 3, "Selected": { "BLM": null, "RDM": { "Name": null }, "SAM": { "Name": "Mine" } } }""");
+
+        var loaded = Settings.Load(path, (message, ex) => Assert.Fail($"{message}: {ex.Message}"));
+
+        Assert.Equal("Mine", Assert.Single(loaded.Selected).Value.Name);
+    }
+
+    [Fact]
+    public void VersionOne_AlwaysVisible_BecomesShowAlways()
+    {
+        File.WriteAllText(path, """{ "Version": 1, "ArmedVisibility": 0, "HideInDuties": true, "IconSize": 56 }""");
+
+        var loaded = Settings.Load(path);
+
+        Assert.True(loaded.ShowAlways);
+        Assert.False(loaded.TrackDungeons);
+        Assert.Equal(56f, loaded.IconSize);
+        Assert.Equal(Settings.CurrentVersion, loaded.Version);
+    }
+
+    [Theory]
+    [InlineData(0, true)]  // always visible
+    [InlineData(1, true)]  // when an enemy is targeted
+    [InlineData(2, false)] // never
+    public void VersionOne_KeepsComingUpForATargetedEnemy_UnlessItWasOff(int armedVisibility, bool expected)
+    {
+        // A new install no longer does this, but a file from back then relied on it.
+        File.WriteAllText(path, $$"""{ "Version": 1, "ArmedVisibility": {{armedVisibility}} }""");
+
+        var loaded = Settings.Load(path);
+
+        Assert.Equal(expected, loaded.ShowOnEnemyTarget);
+    }
+
+    [Fact]
+    public void VersionOne_NeverVisible_TurnsTheTriggersOff()
+    {
+        File.WriteAllText(path, """{ "Version": 1, "ArmedVisibility": 2 }""");
+
+        var loaded = Settings.Load(path);
+
+        Assert.False(loaded.ShowAlways);
+        Assert.False(loaded.ShowAtDummy);
+        Assert.False(loaded.ShowOnEnemyTarget);
+        Assert.False(loaded.ShowInBossDuties);
+    }
+
+    [Fact]
+    public void VersionOne_ShownInDuties_TracksEveryDuty()
+    {
+        File.WriteAllText(path, """{ "Version": 1, "ArmedVisibility": 1, "HideInDuties": false }""");
+
+        var loaded = Settings.Load(path);
+
+        Assert.True(loaded.ShowAtDummy);
+        Assert.True(loaded.TrackDungeons);
+        Assert.True(loaded.TrackAllianceRaids);
+        Assert.True(loaded.TrackOtherDuties);
+    }
+
+    [Fact]
+    public void BeforeVersionThree_SpelledOut_BecomesAutomatic()
+    {
+        File.WriteAllText(path, """{ "Version": 2, "KeybindStyle": 1, "View": 1 }""");
+
+        var loaded = Settings.Load(path);
+
+        Assert.Equal(KeybindStyle.Auto, loaded.KeybindStyle);
+        Assert.Equal(TimelineView.Compact, loaded.View);
+    }
+
+    [Fact]
+    public void BeforeVersionFour_KeyCapsOffEverywhere_StaysOffInBothViews()
+    {
+        // The compact strip's switch used to sit under a master switch; now each view has its own.
+        File.WriteAllText(path, """{ "Version": 3, "ShowKeybinds": false, "CompactShowKeybinds": true }""");
+
+        var loaded = Settings.Load(path);
+
+        Assert.False(loaded.ShowKeybinds);
+        Assert.False(loaded.CompactShowKeybinds);
+        Assert.False(loaded.ToStyle(1f, true).ShowHints);
+        Assert.Equal(Settings.CurrentVersion, loaded.Version);
+    }
+
+    [Fact]
+    public void KeyCaps_AreSwitchedPerView()
+    {
+        var settings = new Settings { ShowKeybinds = false, CompactShowKeybinds = true };
+
+        Assert.False(settings.ToStyle(1f).ShowHints);
+        Assert.True(settings.ToStyle(1f, true).ShowHints);
+    }
+
+    [Fact]
+    public void Presence_IsOneChoiceOverTheTwoSwitches()
+    {
+        var settings = new Settings();
+        Assert.Equal(TimelinePresence.Shown, settings.Presence);
+
+        settings.Presence = TimelinePresence.Minimized;
+        Assert.True(settings.OverlayEnabled);
+        Assert.True(settings.OverlayMinimized);
+
+        settings.Presence = TimelinePresence.Hidden;
+        Assert.False(settings.OverlayEnabled);
+        Assert.Equal(TimelinePresence.Hidden, settings.Presence);
+
+        // Hiding remembers that it was minimized, so switching it back on (the toggle command) restores that.
+        settings.OverlayEnabled = true;
+        Assert.Equal(TimelinePresence.Minimized, settings.Presence);
+
+        settings.Presence = TimelinePresence.Shown;
+        Assert.True(settings.OverlayEnabled);
+        Assert.False(settings.OverlayMinimized);
+    }
+
+    [Fact]
+    public void Presence_SurvivesARoundTrip_WithoutBeingStoredItself()
+    {
+        var settings = new Settings { Presence = TimelinePresence.Minimized };
+
+        settings.Save(path);
+
+        Assert.DoesNotContain("\"Presence\"", File.ReadAllText(path));
+        Assert.Equal(TimelinePresence.Minimized, Settings.Load(path).Presence);
+    }
+
+    [Fact]
+    public void CurrentVersion_KeepsAnExplicitChoice()
+    {
+        var settings = new Settings { KeybindStyle = KeybindStyle.Full };
+        settings.Save(path);
+
+        Assert.Equal(KeybindStyle.Full, Settings.Load(path).KeybindStyle);
+    }
+
+    [Fact]
+    public void ToStyle_FullView()
+    {
+        var settings = new Settings { IconSize = 56f, ShowKeybinds = false, Layout = TimelineLayoutMode.Inline, ShowRuler = false };
+
+        var style = settings.ToStyle(1.5f);
+
+        Assert.False(style.Compact);
+        Assert.Equal(1.5f, style.Scale);
+        Assert.Equal(56f, style.IconSize);
+        Assert.False(style.ShowHints);
+        Assert.False(style.ShowRuler);
+        Assert.Equal(TimelineLayoutMode.Inline, style.Layout);
+        Assert.Equal(settings.Accent, style.Accent);
+        Assert.Equal(BurstCallouts.TwoMinute, style.Callouts);
+    }
+
+    [Fact]
+    public void ToStyle_CompactView_IsAFlatRowWithoutTheExtras()
+    {
+        var settings = new Settings { CompactIconSize = 36f, Layout = TimelineLayoutMode.Staggered, ShowHeader = true, ShowRuler = true };
+
+        var style = settings.ToStyle(1f, true);
+
+        Assert.True(style.Compact);
+        Assert.Equal(36f, style.IconSize);
+        Assert.Equal(TimelineLayoutMode.Inline, style.Layout);
+        Assert.False(style.ShowHeader);
+        Assert.False(style.ShowRuler);
+        Assert.False(style.ShowLaneLabels);
+        Assert.Equal(BurstCallouts.Off, style.Callouts);
+        Assert.True(style.ShowStatus);
+    }
+
+    [Fact]
+    public void SelectionKey_SeparatesOlderLevelCaps()
+    {
+        Assert.Equal("RDM", Settings.SelectionKey("RDM", 100, 100));
+        Assert.Equal("RDM@90", Settings.SelectionKey("RDM", 90, 100));
+        Assert.Equal("RDM@70", Settings.SelectionKey("RDM", 70, 100));
+    }
+}
+
+public class AppearanceTests
+{
+    [Theory]
+    [InlineData("#59B9FF", 0x59, 0xB9, 0xFF)]
+    [InlineData("59b9ff", 0x59, 0xB9, 0xFF)]
+    [InlineData(" #FFF ", 0xFF, 0xFF, 0xFF)]
+    [InlineData("#0a0", 0x00, 0xAA, 0x00)]
+    public void Hex_IsParsed(string text, int r, int g, int b)
+    {
+        Assert.True(Appearance.TryParseHex(text, out var color));
+        Assert.Equal(new Vector3(r / 255f, g / 255f, b / 255f), color);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("#12")]
+    [InlineData("#GGGGGG")]
+    [InlineData("#1234567")]
+    public void BadHex_IsRejected(string text)
+    {
+        Assert.False(Appearance.TryParseHex(text, out _));
+    }
+
+    [Fact]
+    public void Hex_RoundTrips()
+    {
+        foreach (var accent in Appearance.Accents)
+        {
+            Assert.True(Appearance.TryParseHex(Appearance.ToHex(accent.Color), out var parsed));
+            Assert.True(Vector3.Distance(accent.Color, parsed) < 0.005f, accent.Name);
+        }
+    }
+
+    [Fact]
+    public void DefaultSettings_MatchTheFirstPreset()
+    {
+        var settings = new Settings();
+
+        Assert.True(Appearance.Presets[0].Matches(settings));
+        Assert.False(Appearance.Presets[1].Matches(settings));
+
+        Appearance.Presets[1].Apply(settings);
+        Assert.True(Appearance.Presets[1].Matches(settings));
+    }
+}

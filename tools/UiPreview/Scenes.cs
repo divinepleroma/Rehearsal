@@ -4,13 +4,13 @@ using System.Drawing;
 using System.IO;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
-using OpenerTimeline.Data;
-using OpenerTimeline.Training;
-using OpenerTimeline.UI;
-using OpenerTimeline.UI.Timeline;
-using OpenerTimeline.UI.Views;
+using Rehearsal.Data;
+using Rehearsal.Training;
+using Rehearsal.UI;
+using Rehearsal.UI.Timeline;
+using Rehearsal.UI.Views;
 
-namespace OpenerTimeline.Preview;
+namespace Rehearsal.Preview;
 
 /// <summary>The live timeline in its different states and configurations.</summary>
 internal static class TimelineScenes
@@ -243,18 +243,26 @@ internal static class TimelineScenes
 /// <summary>The main window, one image per page, plus the timeline's menu.</summary>
 internal static class WindowScenes
 {
-    public static void Render(Stage stage, string outDir)
+    /// <summary>A few frames to let the layout settle, one long one, then enough short ones for animations to come to rest.</summary>
+    public static Func<int, float> JumpAhead(float seconds)
     {
-        var host = stage.Host;
-        var scale = host.Scale;
+        return frame => frame == 3 ? seconds : 1f / 60f;
+    }
+
+    /// <summary>A main window with something in every tab: a red mage with a saved opener and a few attempts behind them.</summary>
+    /// <param name="host">The application.</param>
+    /// <param name="level">The level they are playing at; below the cap the opener shows fitted to it.</param>
+    public static MainView Prepare(PreviewHost host, int level)
+    {
         var catalog = host.Catalog;
 
-        var trainer = new FakeTrainer(catalog, host.Library) { Level = 90 };
+        var trainer = new FakeTrainer(catalog, host.Library) { Level = level };
         host.FakeTrainer = trainer;
         host.CurrentJob = Jobs.RDM;
 
         // One opener of the player's own, to show how saved entries look (a potion and a wildcard included).
-        host.Library.Save("Level 90 opener (mine)", Jobs.RDM, [25856, 25855, 7561, 25855, 7517, -100, 7518, 0, 25855, 7520, 7521, 7527, 7528]);
+        host.Library.Save(level < catalog.MaxLevel ? "Level 90 opener (mine)" : "My opener", Jobs.RDM,
+                          [25856, 25855, 7561, 25855, 7517, -100, 7518, 0, 25855, 7520, 7521, 7527, 7528]);
         trainer.Select(new OpenerRef(Jobs.RDM, "Standard (The Balance)", true));
 
         // A few attempts of varying quality for the results view.
@@ -275,20 +283,50 @@ internal static class WindowScenes
             return i != 7 && i != 13;
         }));
 
-        var view = new MainView(host);
+        return new MainView(host);
+    }
+
+    public static void Render(Stage stage, string outDir)
+    {
+        var host = stage.Host;
+        var scale = host.Scale;
+        var view = Prepare(host, 90);
         var size = new Vector2(MathF.Round(940f * scale), MathF.Round(640f * scale));
         const int margin = 28;
         var width = (int)size.X + margin * 2;
         var height = (int)size.Y + margin * 2;
 
-        void Page(string name, Action prepare, int frames = 4)
+        void Page(string name, Action prepare, int frames = 4, MainView? window = null, Func<int, float>? delta = null)
         {
             prepare();
-            var canvas = stage.Render(width, height, new Point(330, 150), () => DrawWindow(host, view, new Vector2(margin), size), frames);
+            var content = window ?? view;
+            var canvas = stage.Render(width, height, new Point(330, 150), () => DrawWindow(host, content, new Vector2(margin), size), frames,
+                                      delta: delta);
             var path = Path.Combine(outDir, $"window-{name}.png");
             canvas.Save(path);
             Console.WriteLine($"wrote {path}");
         }
+
+        // The first-run setup, step by step, with its example timeline a few presses in. Each gets
+        // a window of its own so the example starts from the top every time.
+        string[] steps = ["view", "when", "mistakes", "look", "place"];
+        for (var i = 0; i < steps.Length; i++)
+        {
+            var fresh = new MainView(host);
+            var step = i;
+            Page($"setup-{i + 1}-{steps[i]}", () => fresh.ShowSetup(step), 18, fresh, JumpAhead(i == 2 ? 3.2f : 6.2f));
+        }
+
+        // The same first step with the other two views chosen.
+        var other = new MainView(host);
+        host.Settings.View = TimelineView.Expanded;
+        Page("setup-1-view-full", () => other.ShowSetup(), 18, other, JumpAhead(6.2f));
+        other = new MainView(host);
+        host.Settings.View = TimelineView.Automatic;
+        Page("setup-1-view-automatic", () => other.ShowSetup(), 18, other, JumpAhead(6.2f));
+        host.Settings.View = TimelineView.Compact;
+        host.Settings.OverlayLocked = true; // the last step borrowed it
+
 
         Page("openers", () => view.Show(MainView.Section.Openers));
         Page("editor", () => view.Edit(new OpenerRef(Jobs.RDM, "Level 90 opener (mine)", false)));
@@ -318,7 +356,7 @@ internal static class WindowScenes
     }
 
     /// <summary>The right-click menu, as it opens from the full panel, the compact strip or the minimized tab.</summary>
-    private static void RenderMenu(Stage stage, PreviewHost host, string outDir, OverlayMenu.Origin origin, string name)
+    public static void RenderMenu(Stage stage, PreviewHost host, string outDir, OverlayMenu.Origin origin, string name)
     {
         var frameIndex = 0;
         var canvas = stage.Render(520, 520, new Point(600, 400), () =>
@@ -347,7 +385,7 @@ internal static class WindowScenes
         Console.WriteLine($"wrote {path}");
     }
 
-    private static void DrawWindow(PreviewHost host, MainView view, Vector2 pos, Vector2 size)
+    public static void DrawWindow(PreviewHost host, MainView view, Vector2 pos, Vector2 size)
     {
         using var theme = Theme.Push(host.Settings.Accent, host.Settings.WindowOpacity, host.Scale);
         ImGui.SetNextWindowPos(pos);
@@ -355,7 +393,7 @@ internal static class WindowScenes
 
         const ImGuiWindowFlags flags = ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoCollapse
                                        | ImGuiWindowFlags.NoSavedSettings;
-        if (ImGui.Begin("Opener Timeline###main", flags))
+        if (ImGui.Begin(Branding.Name + "###main", flags))
         {
             var min = ImGui.GetWindowPos();
             host.DrawBackdrop(ImGui.GetWindowDrawList(), min, min + ImGui.GetWindowSize(), ImGui.GetStyle().WindowRounding, host.Settings.Blur,

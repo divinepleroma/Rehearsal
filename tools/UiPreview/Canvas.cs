@@ -6,7 +6,7 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using Dalamud.Bindings.ImGui;
 
-namespace OpenerTimeline.Preview;
+namespace Rehearsal.Preview;
 
 internal sealed class Texture(int width, int height, byte[] rgba)
 {
@@ -174,6 +174,17 @@ internal sealed unsafe class Canvas
         finally
         {
             bitmap.UnlockBits(data);
+        }
+
+        // Photographs of the UI over scenery are far smaller as JPEG; anything else stays lossless.
+        if (path.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase))
+        {
+            var codec = Array.Find(ImageCodecInfo.GetImageEncoders(), c => c.FormatID == ImageFormat.Jpeg.Guid)
+                        ?? throw new InvalidOperationException("No JPEG encoder available.");
+            using var parameters = new EncoderParameters(1);
+            parameters.Param[0] = new EncoderParameter(Encoder.Quality, 90L);
+            bitmap.Save(path, codec, parameters);
+            return;
         }
 
         bitmap.Save(path, ImageFormat.Png);

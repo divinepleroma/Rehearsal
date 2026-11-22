@@ -4,11 +4,11 @@ using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Lumina;
 using Lumina.Data.Files;
-using OpenerTimeline.Data;
-using OpenerTimeline.UI;
-using OpenerTimeline.UI.Timeline;
+using Rehearsal.Data;
+using Rehearsal.UI;
+using Rehearsal.UI.Timeline;
 
-namespace OpenerTimeline.Preview;
+namespace Rehearsal.Preview;
 
 /// <summary>
 /// The preview tool's side of <see cref="IAppHost"/>: icons come straight out of the game's data
@@ -40,7 +40,7 @@ internal sealed unsafe class PreviewHost : IAppHost
     public FakeTrainer FakeTrainer { get; set; } = null!;
     public ITrainer Trainer => FakeTrainer;
     public Jobs CurrentJob { get; set; } = Jobs.BLM;
-    public string Version => "0.1.0";
+    public string Version => "0.2.0";
 
     public void SaveSettings()
     {

@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OpenerTimeline.Data;
-using OpenerTimeline.Training;
+using Rehearsal.Data;
+using Rehearsal.Training;
 
-namespace OpenerTimeline.Preview;
+namespace Rehearsal.Preview;
 
 /// <summary>
 /// Prints what the data layer derives from the game files, so it can be checked by eye against

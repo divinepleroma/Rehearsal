@@ -8,9 +8,9 @@ using System.Text.Json;
 using Dalamud.Bindings.ImGui;
 using Lumina;
 using Lumina.Data;
-using OpenerTimeline.Data;
+using Rehearsal.Data;
 
-namespace OpenerTimeline.Preview;
+namespace Rehearsal.Preview;
 
 internal static class Program
 {
@@ -19,12 +19,12 @@ internal static class Program
         var options = Options.Parse(args);
         if (options == null)
         {
-            Console.WriteLine("usage: UiPreview [--game <sqpack dir>] [--out <dir>] [--bg <image>] [--scale <ui scale>] [--font <ttf/otf>] [--data]");
+            Console.WriteLine("usage: UiPreview [--game <sqpack dir>] [--out <dir>] [--bg <image>] [--scale <ui scale>] [--font <ttf/otf>] [--data] [--site <dir>]");
             return 1;
         }
 
         Console.WriteLine($"game data : {options.SqPack}");
-        Console.WriteLine($"output    : {options.OutDir}");
+        Console.WriteLine($"output    : {options.SiteDir ?? options.OutDir}");
 
         var gameData = new GameData(options.SqPack, new LuminaOptions { PanicOnSheetChecksumMismatch = false });
         var upgrades = new UpgradeSource(gameData.GetExcelSheet<Lumina.Excel.Sheets.Action>(Language.English)!,
@@ -41,7 +41,6 @@ internal static class Program
             return 0;
         }
 
-        Directory.CreateDirectory(options.OutDir);
         using var background = options.Background != null && File.Exists(options.Background) ? new Bitmap(options.Background) : null;
 
         ImGui.SetCurrentContext(ImGui.CreateContext());
@@ -55,6 +54,15 @@ internal static class Program
         var host = new PreviewHost(gameData, catalog, library, options.Scale);
         host.BuildFonts(options.Font);
 
+        if (options.SiteDir != null)
+        {
+            // The product page's pictures, over painted scenery; nothing else is rendered.
+            SiteScenes.Render(host, options.SiteDir);
+            Console.WriteLine("done");
+            return 0;
+        }
+
+        Directory.CreateDirectory(options.OutDir);
         var stage = new Stage(host, background);
         TimelineScenes.Render(stage, Path.Combine(options.OutDir, "timeline.png"));
         WindowScenes.Render(stage, options.OutDir);
@@ -72,6 +80,10 @@ internal sealed class Options
     public string OpenersFile = string.Empty;
     public string OutDir = string.Empty;
     public float Scale = 1f;
+
+    /// <summary>Render the product page's pictures into this directory instead of the usual preview.</summary>
+    public string? SiteDir;
+
     public string SqPack = string.Empty;
 
     public static Options? Parse(string[] args)
@@ -97,6 +109,11 @@ internal sealed class Options
                     break;
                 case "--data":
                     options.DataReport = true;
+                    break;
+                case "--site":
+                    options.SiteDir = Next();
+                    if (string.IsNullOrEmpty(options.SiteDir))
+                        return null;
                     break;
                 case "--font":
                     options.Font = Next() ?? string.Empty;
@@ -160,7 +177,7 @@ internal sealed class Options
     private static string FindRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "OpenerTimeline.sln")))
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "Rehearsal.sln")))
             dir = dir.Parent;
         return dir?.FullName ?? Directory.GetCurrentDirectory();
     }
@@ -178,7 +195,9 @@ internal sealed class Stage(PreviewHost host, Bitmap? background)
     /// <param name="draw">Submits the scene.</param>
     /// <param name="frames">ImGui needs a few frames before window layouts settle.</param>
     /// <param name="mouse">Where the cursor hovers, if anywhere.</param>
-    public Canvas Render(int width, int height, Point backgroundOrigin, Action draw, int frames = 1, Vector2? mouse = null)
+    /// <param name="delta">How much time passes before each frame; a sixtieth of a second when not given.</param>
+    public Canvas Render(
+        int width, int height, Point backgroundOrigin, Action draw, int frames = 1, Vector2? mouse = null, Func<int, float>? delta = null)
     {
         var io = ImGui.GetIO();
         io.DisplaySize = new Vector2(width, height);
@@ -186,6 +205,7 @@ internal sealed class Stage(PreviewHost host, Bitmap? background)
 
         for (var i = 0; i < frames; i++)
         {
+            io.DeltaTime = delta?.Invoke(i) ?? 1f / 60f;
             host.Backdrops.Clear();
             ImGui.NewFrame();
             ImGui.PushFont(host.DefaultFont);

@@ -14,17 +14,18 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>disable</ImplicitUsings>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <RootNamespace>OpenerTimeline.Preview</RootNamespace>
+        <RootNamespace>Rehearsal.Preview</RootNamespace>
         <IsPackable>false</IsPackable>
         <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
         <DalamudLibPath Condition="'$(DalamudLibPath)' == ''">$(AppData)\XIVLauncher\addon\Hooks\dev\</DalamudLibPath>
     </PropertyGroup>
 
     <ItemGroup>
-        <Compile Include="..\..\OpenerTimeline\Data\**\*.cs" Link="Plugin\Data\%(RecursiveDir)%(Filename)%(Extension)" />
-        <Compile Include="..\..\OpenerTimeline\Training\**\*.cs" Link="Plugin\Training\%(RecursiveDir)%(Filename)%(Extension)" />
-        <Compile Include="..\..\OpenerTimeline\UI\**\*.cs" Link="Plugin\UI\%(RecursiveDir)%(Filename)%(Extension)" />
-        <Compile Include="..\..\OpenerTimeline\Settings.cs" Link="Plugin\Settings.cs" />
+        <Compile Include="..\..\Rehearsal\Data\**\*.cs" Link="Plugin\Data\%(RecursiveDir)%(Filename)%(Extension)" />
+        <Compile Include="..\..\Rehearsal\Training\**\*.cs" Link="Plugin\Training\%(RecursiveDir)%(Filename)%(Extension)" />
+        <Compile Include="..\..\Rehearsal\UI\**\*.cs" Link="Plugin\UI\%(RecursiveDir)%(Filename)%(Extension)" />
+        <Compile Include="..\..\Rehearsal\Settings.cs" Link="Plugin\Settings.cs" />
+        <Compile Include="..\..\Rehearsal\Branding.cs" Link="Plugin\Branding.cs" />
     </ItemGroup>
 
     <ItemGroup>

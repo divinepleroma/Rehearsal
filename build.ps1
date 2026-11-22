@@ -12,6 +12,7 @@
 .EXAMPLE
     .\build.ps1                 # build + test
     .\build.ps1 -Preview        # also render the UI to artifacts\preview\*.png
+    .\build.ps1 -Site           # re-render the product page's pictures into docs\img
     .\build.ps1 -Configuration Debug
 #>
 [CmdletBinding()]
@@ -27,6 +28,9 @@ param(
 
     # An image to use as the scenery behind the preview (e.g. one of your screenshots).
     [string] $PreviewBackground,
+
+    # Render the pictures of the product page (docs\img) from the real UI code (needs a local game install).
+    [switch] $Site,
 
     [switch] $SkipTests
 )
@@ -49,12 +53,12 @@ if (-not $hasSdk) {
 $root = $PSScriptRoot
 
 Write-Host "==> Building the plugin ($Configuration)" -ForegroundColor Cyan
-& $dotnet build (Join-Path $root 'OpenerTimeline\OpenerTimeline.csproj') -c $Configuration
+& $dotnet build (Join-Path $root 'Rehearsal\Rehearsal.csproj') -c $Configuration
 if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
 
 if (-not $SkipTests) {
     Write-Host '==> Running the tests' -ForegroundColor Cyan
-    & $dotnet test (Join-Path $root 'OpenerTimeline.Tests\OpenerTimeline.Tests.csproj') -c $Configuration
+    & $dotnet test (Join-Path $root 'Rehearsal.Tests\Rehearsal.Tests.csproj') -c $Configuration
     if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
 }
 
@@ -66,7 +70,14 @@ if ($Preview) {
     if ($LASTEXITCODE -ne 0) { throw 'Preview failed.' }
 }
 
-$dll = Join-Path $root "OpenerTimeline\bin\$Configuration\OpenerTimeline.dll"
+if ($Site) {
+    Write-Host '==> Rendering the pictures for the product page' -ForegroundColor Cyan
+    # One and a half times the size they are shown at, so they stay sharp on dense screens.
+    & $dotnet run --project (Join-Path $root 'tools\UiPreview\UiPreview.csproj') -c Release -- --scale 1.5 --site (Join-Path $root 'docs\img')
+    if ($LASTEXITCODE -ne 0) { throw 'Rendering the site pictures failed.' }
+}
+
+$dll = Join-Path $root "Rehearsal\bin\$Configuration\Rehearsal.dll"
 Write-Host ''
 Write-Host 'Done. To load it in game, add this path under' -ForegroundColor Green
 Write-Host '  /xlsettings -> Experimental -> Dev Plugin Locations' -ForegroundColor Green

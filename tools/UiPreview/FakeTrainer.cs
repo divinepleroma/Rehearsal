@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OpenerTimeline.Data;
-using OpenerTimeline.Training;
-using OpenerTimeline.UI;
-using OpenerTimeline.UI.Timeline;
+using Rehearsal.Data;
+using Rehearsal.Training;
+using Rehearsal.UI;
+using Rehearsal.UI.Timeline;
 
-namespace OpenerTimeline.Preview;
+namespace Rehearsal.Preview;
 
 /// <summary>A scripted stand-in for the live trainer: real sessions, driven by made-up button presses.</summary>
 internal sealed class FakeTrainer(ActionCatalog catalog, OpenerLibrary library) : ITrainer

@@ -32,14 +32,14 @@ jobs:
           Expand-Archive -Force latest.zip "$env:AppData\XIVLauncher\addon\Hooks\dev\"
 
       - name: Build
-        run: dotnet build OpenerTimeline/OpenerTimeline.csproj --configuration Release
+        run: dotnet build Rehearsal/Rehearsal.csproj --configuration Release
 
       - name: Test
-        run: dotnet test OpenerTimeline.Tests/OpenerTimeline.Tests.csproj --configuration Release
+        run: dotnet test Rehearsal.Tests/Rehearsal.Tests.csproj --configuration Release
 
       - name: Upload plugin
         uses: actions/upload-artifact@v4
         with:
-          name: OpenerTimeline
-          path: OpenerTimeline/bin/Release/OpenerTimeline/latest.zip
+          name: Rehearsal
+          path: Rehearsal/bin/Release/Rehearsal/latest.zip
           if-no-files-found: error

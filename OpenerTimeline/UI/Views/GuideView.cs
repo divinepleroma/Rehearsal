@@ -17,7 +17,8 @@ public sealed class GuideView(IAppHost host, Action<MainView.Section> open, Acti
 {
     private static readonly string[] Titles =
     [
-        "The idea", "Pick an opener", "Place the timeline", "Reading it", "Practising", "When it shows", "Levels and old content", "Commands"
+        "The idea", "Pick an opener", "Place the timeline", "Reading it", "Practising", "When it shows", "Levels and old content",
+        "Commands and credits"
     ];
 
     private readonly Demo demo = new(host);
@@ -95,7 +96,7 @@ public sealed class GuideView(IAppHost host, Action<MainView.Section> open, Acti
                     DrawLevels(scale, accent);
                     break;
                 default:
-                    DrawCommands(scale);
+                    DrawCommands(scale, accent);
                     break;
             }
 
@@ -179,8 +180,27 @@ public sealed class GuideView(IAppHost host, Action<MainView.Section> open, Acti
         Widgets.TextDim(settings.OverlayLocked ? "It is locked right now." : "It is unlocked right now - look for the outlined panel.");
 
         ImGui.Dummy(new Vector2(0f, 4f * scale));
-        Bullet("Hold Ctrl+Shift and right-click a locked timeline to open its menu without unlocking it.", accent, scale);
+        Bullet("Hold Ctrl+Shift to reach a locked timeline without unlocking it: its buttons appear and a right-click opens its menu.", accent, scale);
         Bullet("The menu switches opener and view, and shows or hides each part of the timeline.", accent, scale);
+
+        ImGui.Dummy(new Vector2(0f, 6f * scale));
+        Paragraph("Out of the way without losing it: the two small buttons at its top right minimize it to a tab, or hide it. "
+                  + "They are there whenever the mouse can reach the timeline. The same choice sits at the top of this window:");
+
+        var presence = settings.Presence;
+        if (Widgets.Chip("Shown##presence", presence == TimelinePresence.Shown, accent, scale))
+            SetPresence(TimelinePresence.Shown);
+        ImGui.SameLine();
+        if (Widgets.Chip("Minimized##presence", presence == TimelinePresence.Minimized, accent, scale))
+            SetPresence(TimelinePresence.Minimized);
+        ImGui.SameLine();
+        if (Widgets.Chip("Hidden##presence", presence == TimelinePresence.Hidden, accent, scale))
+            SetPresence(TimelinePresence.Hidden);
+
+        ImGui.Dummy(new Vector2(0f, 2f * scale));
+        Bullet("Minimized, a small tab stays behind with where the run stands. Click it and the timeline is back; "
+               + "it takes clicks even while locked. Your opener is still followed.", accent, scale);
+        Bullet("Hidden, nothing is drawn and nothing is followed.", accent, scale);
 
         ImGui.Dummy(new Vector2(0f, 6f * scale));
         Paragraph("There are two views, and each remembers its own position:");
@@ -282,6 +302,10 @@ public sealed class GuideView(IAppHost host, Action<MainView.Section> open, Acti
             dl.AddLine(new Vector2(b.X + size * 0.5f - 6f * scale, b.Y + size + 5f * scale), new Vector2(b.X + size * 0.5f + 6f * scale, b.Y + size + 5f * scale),
                        Palette.Pack(Palette.Warn), 2f * scale);
         });
+
+        Widgets.Note("About the numbers: The Balance publishes its openers as pictures, so there is nothing for a plugin to "
+                     + "download and keep in sync. The times and GCD numbers are worked out from the game's own data and "
+                     + "your current GCD speed instead. Treat them as a plan, not a promise.");
     }
 
     private void DrawPractising(float scale, Vector3 accent)
@@ -312,7 +336,7 @@ public sealed class GuideView(IAppHost host, Action<MainView.Section> open, Acti
             open(MainView.Section.Results);
         ImGui.SameLine();
         if (ImGui.Button("Change how mistakes are shown"))
-            openSettings(SettingsView.Page.Practice);
+            openSettings(SettingsView.Page.Behaviour);
 
         ImGui.Dummy(new Vector2(0f, 2f * scale));
         Widgets.Note("There you can also pick a soft sound for a wrong press, switch to a louder visual cue, or turn the cue off "
@@ -341,7 +365,7 @@ public sealed class GuideView(IAppHost host, Action<MainView.Section> open, Acti
 
         ImGui.Dummy(new Vector2(0f, 6f * scale));
         if (Widgets.PrimaryButton("Change these", accent))
-            openSettings(SettingsView.Page.Visibility);
+            openSettings(SettingsView.Page.Behaviour);
     }
 
     private void DrawLevels(float scale, Vector3 accent)
@@ -376,21 +400,32 @@ public sealed class GuideView(IAppHost host, Action<MainView.Section> open, Acti
             open(MainView.Section.Editor);
     }
 
-    private void DrawCommands(float scale)
+    private void DrawCommands(float scale, Vector3 accent)
     {
         Paragraph("Everything can be done with the mouse, but these are handy for macros:");
 
-        Command("/opener", "Open the opener list", scale);
-        Command("/opener guide", "Open this walkthrough", scale);
-        Command("/opener settings", "Open the settings", scale);
+        Command("/opener", "Open this window", scale);
+        Command("/opener guide  |  settings", "Open this walkthrough, or the settings", scale);
+        Command("/opener show  |  min  |  hide", "Show the timeline, minimize it to a tab, or hide it", scale);
+        Command("/opener toggle", "Flip between shown and hidden", scale);
         Command("/opener unlock  |  lock", "Free the timeline to move it, or pin it", scale);
         Command("/opener view full | compact | auto", "Switch views", scale);
-        Command("/opener toggle", "Show or hide the timeline", scale);
         Command("/opener reset", "Abandon the current attempt", scale);
         Command("/opener cd [seconds]", "Start a private practice countdown", scale);
 
         ImGui.Dummy(new Vector2(0f, 6f * scale));
         Widgets.Note("Right-clicking the timeline gives you most of these as a menu. When it is locked, hold Ctrl+Shift while you right-click.");
+
+        Widgets.SectionTitle("Credits", accent, scale);
+        Widgets.Note($"Opener Timeline {host.Version}. A fork of OpenerCreator by Infi, herulume and sevii, rebuilt around a live "
+                     + "timeline. The bundled openers are the ones published by The Balance. Licensed AGPL-3.0-or-later.");
+
+        ImGui.Dummy(new Vector2(0f, 2f * scale));
+        if (ImGui.Button("OpenerCreator (original)"))
+            host.OpenLink("https://github.com/Infiziert90/OpenerCreator");
+        ImGui.SameLine();
+        if (ImGui.Button("The Balance"))
+            host.OpenLink("https://www.thebalanceffxiv.com/");
     }
 
     // ---- Building blocks ----
@@ -483,7 +518,15 @@ public sealed class GuideView(IAppHost host, Action<MainView.Section> open, Acti
     private void SetLocked(bool locked)
     {
         host.Settings.OverlayLocked = locked;
-        host.Settings.OverlayEnabled = true;
+
+        // This page is about putting the timeline somewhere, so make sure it can be seen.
+        host.Settings.Presence = TimelinePresence.Shown;
+        host.SaveSettings();
+    }
+
+    private void SetPresence(TimelinePresence presence)
+    {
+        host.Settings.Presence = presence;
         host.SaveSettings();
     }
 

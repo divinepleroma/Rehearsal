@@ -7,22 +7,35 @@ using OpenerTimeline.UI.Timeline;
 namespace OpenerTimeline.UI.Views;
 
 /// <summary>
-/// The timeline's right-click menu: everything you might want to change without opening the main
-/// window - which opener, which view, what is shown.
+/// The timeline's right-click menu: what you want within reach while playing - which opener,
+/// which view, minimize, hide, lock. It only offers the switches of the view it was opened on;
+/// everything else is one click away in the settings.
 /// </summary>
 public static class OverlayMenu
 {
+    /// <summary>What was right-clicked.</summary>
+    public enum Origin
+    {
+        FullPanel,
+        CompactStrip,
+
+        /// <summary>The small tab the minimized timeline leaves behind.</summary>
+        Tab
+    }
+
     /// <summary>Draws the menu items. Call between BeginPopup and EndPopup.</summary>
     /// <param name="host">The application.</param>
+    /// <param name="origin">What the menu was opened on.</param>
     /// <param name="open">Opens a section of the main window.</param>
     /// <param name="notify">Tells the player something in chat.</param>
-    public static void Draw(IAppHost host, Action<MainView.Section> open, Action<string> notify)
+    public static void Draw(IAppHost host, Origin origin, Action<MainView.Section> open, Action<string> notify)
     {
         var settings = host.Settings;
         var trainer = host.Trainer;
         var changed = false;
+        var hasOpener = trainer.ActiveActions.Count > 0;
 
-        var title = trainer.ActiveActions.Count > 0 ? trainer.ActiveTitle : "No opener selected";
+        var title = hasOpener ? trainer.ActiveTitle : "No opener selected";
         ImGui.TextDisabled(trainer.ActiveJob == Jobs.ANY ? title : $"{trainer.ActiveJob}  {title}");
         ImGui.Separator();
 
@@ -42,66 +55,49 @@ public static class OverlayMenu
                 ImGui.TextDisabled(job == Jobs.ANY ? "No openers for this job" : $"No openers for {job} yet");
 
             ImGui.Separator();
-            if (any && ImGui.MenuItem("None", trainer.ActiveActions.Count == 0))
+            if (any && ImGui.MenuItem("None", !hasOpener))
                 trainer.Deselect(job);
-            if (ImGui.MenuItem("Browse all openers..."))
+            if (ImGui.MenuItem("Browse or edit openers..."))
                 open(MainView.Section.Openers);
-            if (ImGui.MenuItem("Build or edit an opener..."))
-                open(MainView.Section.Editor);
 
             ImGui.EndMenu();
         }
 
-        if (ImGui.BeginMenu("View"))
+        if (ImGui.BeginMenu("Display"))
         {
             changed |= Choice("Full panel", ref settings.View, TimelineView.Expanded);
             changed |= Choice("Compact strip", ref settings.View, TimelineView.Compact);
             changed |= Choice("Automatic (full before the pull, compact after)", ref settings.View, TimelineView.Automatic);
-            ImGui.Separator();
-            changed |= Choice("Two lanes (oGCDs raised)", ref settings.Layout, TimelineLayoutMode.Staggered);
-            changed |= Choice("Flat row", ref settings.Layout, TimelineLayoutMode.Inline);
-            ImGui.EndMenu();
-        }
 
-        if (ImGui.BeginMenu("Show"))
-        {
-            changed |= ImGui.MenuItem("Key caps", ref settings.ShowKeybinds);
-            changed |= ImGui.MenuItem("GCD numbers and time", ref settings.ShowRuler);
-            changed |= ImGui.MenuItem("Header", ref settings.ShowHeader);
-            changed |= ImGui.MenuItem("Lane labels", ref settings.ShowLaneLabels);
-            changed |= ImGui.MenuItem("Progress bar", ref settings.ShowProgress);
-
-            ImGui.Separator();
-            if (ImGui.BeginMenu("Cooldown markers"))
+            switch (origin)
             {
-                changed |= Choice("Off", ref settings.CooldownBadges, CooldownBadgeMode.Off);
-                changed |= Choice("60s and 120s cooldowns", ref settings.CooldownBadges, CooldownBadgeMode.Burst);
-                changed |= Choice("Every cooldown of 30s or more", ref settings.CooldownBadges, CooldownBadgeMode.All);
-                ImGui.EndMenu();
+                case Origin.FullPanel:
+                    ImGui.Separator();
+                    changed |= Choice("Two lanes (oGCDs raised)", ref settings.Layout, TimelineLayoutMode.Staggered);
+                    changed |= Choice("Flat row", ref settings.Layout, TimelineLayoutMode.Inline);
+                    ImGui.Separator();
+                    changed |= ImGui.MenuItem("Header", ref settings.ShowHeader);
+                    changed |= ImGui.MenuItem("Key caps", ref settings.ShowKeybinds);
+                    changed |= ImGui.MenuItem("GCD numbers and time", ref settings.ShowRuler);
+                    changed |= ImGui.MenuItem("Lane labels", ref settings.ShowLaneLabels);
+                    changed |= ImGui.MenuItem("Progress bar", ref settings.ShowProgress);
+                    break;
+                case Origin.CompactStrip:
+                    ImGui.Separator();
+                    changed |= ImGui.MenuItem("Status line", ref settings.CompactShowStatus);
+                    changed |= ImGui.MenuItem("Key caps", ref settings.CompactShowKeybinds);
+                    changed |= ImGui.MenuItem("Cooldown markers", ref settings.CompactShowBadges);
+                    changed |= ImGui.MenuItem("Progress bar", ref settings.ShowProgress);
+                    break;
             }
 
-            if (ImGui.BeginMenu("Burst notes (GCD n)"))
-            {
-                changed |= Choice("Off", ref settings.BurstCallouts, BurstCallouts.Off);
-                changed |= Choice("Two minute cooldowns", ref settings.BurstCallouts, BurstCallouts.TwoMinute);
-                changed |= Choice("One and two minute cooldowns", ref settings.BurstCallouts, BurstCallouts.OneAndTwoMinute);
-                ImGui.EndMenu();
-            }
-
-            ImGui.Separator();
-            changed |= ImGui.MenuItem("Compact strip: status line", ref settings.CompactShowStatus);
-            changed |= ImGui.MenuItem("Compact strip: key caps", ref settings.CompactShowKeybinds);
-            changed |= ImGui.MenuItem("Compact strip: cooldown markers", ref settings.CompactShowBadges);
             ImGui.EndMenu();
         }
 
         ImGui.Separator();
 
-        if (ImGui.MenuItem("Reset run", false, trainer.ActiveActions.Count > 0))
-            trainer.Reset();
-
         var counting = trainer.CountdownRemaining >= 0f;
-        if (ImGui.MenuItem(counting ? "Stop countdown" : $"Start {settings.CountdownSeconds}s countdown", false, trainer.ActiveActions.Count > 0))
+        if (ImGui.MenuItem(counting ? "Stop countdown" : $"Start {settings.CountdownSeconds}s countdown", false, hasOpener))
         {
             if (counting)
                 trainer.StopCountdown();
@@ -109,7 +105,31 @@ public static class OverlayMenu
                 trainer.StartCountdown();
         }
 
+        if (ImGui.MenuItem("Reset run", false, hasOpener))
+            trainer.Reset();
+
         ImGui.Separator();
+
+        if (origin == Origin.Tab)
+        {
+            if (ImGui.MenuItem("Show the timeline"))
+            {
+                settings.Presence = TimelinePresence.Shown;
+                changed = true;
+            }
+        }
+        else if (ImGui.MenuItem("Minimize"))
+        {
+            settings.Presence = TimelinePresence.Minimized;
+            changed = true;
+        }
+
+        if (ImGui.MenuItem("Hide"))
+        {
+            settings.Presence = TimelinePresence.Hidden;
+            changed = true;
+            notify(HiddenNotice);
+        }
 
         if (ImGui.MenuItem("Locked in place", settings.OverlayLocked))
         {
@@ -123,21 +143,12 @@ public static class OverlayMenu
             }
         }
 
-        if (ImGui.MenuItem("Hide the timeline"))
-        {
-            settings.OverlayEnabled = false;
-            changed = true;
-            notify("Timeline hidden. /opener toggle brings it back.");
-        }
-
         ImGui.Separator();
 
         if (ImGui.MenuItem("Results..."))
             open(MainView.Section.Results);
         if (ImGui.MenuItem("Settings..."))
             open(MainView.Section.Settings);
-        if (ImGui.MenuItem("How to use..."))
-            open(MainView.Section.Guide);
 
         if (changed)
         {
@@ -145,6 +156,9 @@ public static class OverlayMenu
             host.SaveSettings();
         }
     }
+
+    /// <summary>Said in chat whenever the timeline is hidden from the HUD itself, so it is clear how to get it back.</summary>
+    public const string HiddenNotice = "Timeline hidden. Bring it back from the Opener Timeline window (/opener), or with /opener show.";
 
     /// <summary>A menu entry that is ticked while the setting has this value.</summary>
     private static bool Choice<T>(string label, ref T current, T value) where T : struct, Enum

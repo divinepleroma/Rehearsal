@@ -5,36 +5,50 @@ using OpenerTimeline.UI.Timeline;
 
 namespace OpenerTimeline.UI.Views;
 
-/// <summary>All options, split into pages. Every change is applied and saved immediately.</summary>
-public sealed class SettingsView(IAppHost host, Action showGuide)
+/// <summary>
+/// All options on three pages. Switches that belong together share a row of chips, and what is
+/// set once or never sits folded away at the bottom of its page. Every change is applied and
+/// saved immediately.
+/// </summary>
+public sealed class SettingsView(IAppHost host)
 {
     public enum Page
     {
+        /// <summary>What is on the HUD: state, view and the parts of each view.</summary>
         Timeline,
-        Visibility,
-        Hints,
-        Practice,
-        Appearance,
-        About
+
+        /// <summary>When it appears, where it follows along, and how practice runs behave.</summary>
+        Behaviour,
+
+        /// <summary>Colours, transparency and how keys are written.</summary>
+        Appearance
     }
 
     private static readonly (Page Page, string Label)[] Pages =
     [
         (Page.Timeline, "Timeline"),
-        (Page.Visibility, "When it shows"),
-        (Page.Hints, "Key hints"),
-        (Page.Practice, "Practice"),
-        (Page.Appearance, "Appearance"),
-        (Page.About, "About")
+        (Page.Behaviour, "Behaviour"),
+        (Page.Appearance, "Appearance")
     ];
 
     private Vector3 hexFor = new(-1f);
     private string hexText = string.Empty;
+    private bool moreAppearance;
+    private bool moreBehaviour;
+    private bool moreTimeline;
     private Page page;
 
-    public void Show(Page target)
+    /// <param name="target">The page to open.</param>
+    /// <param name="unfolded">Also open what is folded away on it.</param>
+    public void Show(Page target, bool unfolded = false)
     {
         page = target;
+        if (!unfolded)
+            return;
+
+        moreTimeline = true;
+        moreBehaviour = true;
+        moreAppearance = true;
     }
 
     public void Draw()
@@ -44,6 +58,8 @@ public sealed class SettingsView(IAppHost host, Action showGuide)
         var accent = settings.Accent;
         var changed = false;
 
+        var rowStart = ImGui.GetCursorScreenPos();
+        var rowWidth = ImGui.GetContentRegionAvail().X;
         for (var i = 0; i < Pages.Length; i++)
         {
             if (i > 0)
@@ -52,11 +68,21 @@ public sealed class SettingsView(IAppHost host, Action showGuide)
                 page = Pages[i].Page;
         }
 
+        // Which build this is, out of the way on the same line.
+        var version = "Opener Timeline " + host.Version;
+        var versionSize = ImGui.CalcTextSize(version);
+        if (ImGui.GetItemRectMax().X + versionSize.X + 24f * scale < rowStart.X + rowWidth)
+        {
+            ImGui.GetWindowDrawList().AddText(
+                new Vector2(rowStart.X + rowWidth - versionSize.X, MathF.Round(rowStart.Y + (ImGui.GetItemRectSize().Y - versionSize.Y) * 0.5f)),
+                Palette.Pack(Palette.White, Palette.TextFaintAlpha), version);
+        }
+
         ImGui.Dummy(new Vector2(0f, 2f * scale));
 
         if (ImGui.BeginChild("##settings", Vector2.Zero, false))
         {
-            var column = MathF.Min(270f * scale, ImGui.GetContentRegionAvail().X * 0.42f);
+            var column = MathF.Min(230f * scale, ImGui.GetContentRegionAvail().X * 0.36f);
             ImGui.PushItemWidth(-1f);
 
             switch (page)
@@ -64,20 +90,11 @@ public sealed class SettingsView(IAppHost host, Action showGuide)
                 case Page.Timeline:
                     changed |= DrawTimeline(settings, accent, scale, column);
                     break;
-                case Page.Visibility:
-                    changed |= DrawVisibility(settings, accent, scale);
-                    break;
-                case Page.Hints:
-                    changed |= DrawHints(settings, accent, scale, column);
-                    break;
-                case Page.Practice:
-                    changed |= DrawPractice(settings, accent, scale, column);
-                    break;
-                case Page.Appearance:
-                    changed |= DrawAppearance(settings, accent, scale, column);
+                case Page.Behaviour:
+                    changed |= DrawBehaviour(settings, accent, scale, column);
                     break;
                 default:
-                    DrawAbout(accent, scale);
+                    changed |= DrawAppearance(settings, accent, scale, column);
                     break;
             }
 
@@ -95,47 +112,92 @@ public sealed class SettingsView(IAppHost host, Action showGuide)
 
     // ---- Timeline ----
 
-    private static bool DrawTimeline(Settings settings, Vector3 accent, float scale, float column)
+    private bool DrawTimeline(Settings settings, Vector3 accent, float scale, float column)
     {
         var changed = false;
 
-        Widgets.SectionTitle("Timeline", accent, scale);
+        // Shown, minimized or hidden is not repeated here: that switch sits at the top of the
+        // window on every tab.
+        Widgets.SectionTitle("On screen", accent, scale);
 
-        changed |= Widgets.Toggle("Show the timeline##enabled", ref settings.OverlayEnabled, accent, scale);
-        Widgets.Tooltip("Master switch. Also: /opener toggle", scale);
+        Widgets.Label("View", column, scale,
+                      "The full panel shows the whole plan. The compact strip is a small floating row with just what is "
+                      + "coming up, and keeps the action to press in one fixed spot. Automatic gives you the panel "
+                      + "before the pull and the strip once it starts. Each view remembers its own position.");
+        var row = new ChipRow(accent, scale);
+        changed |= row.Choice("Full panel##view", ref settings.View, TimelineView.Expanded);
+        changed |= row.Choice("Compact strip##view", ref settings.View, TimelineView.Compact);
+        changed |= row.Choice("Automatic##view", ref settings.View, TimelineView.Automatic);
+        row.End();
 
         changed |= Widgets.Toggle("Lock in place (click-through)##locked", ref settings.OverlayLocked, accent, scale);
-        Widgets.Tooltip("Unlocked: drag it anywhere and resize its width. Locked: it ignores the mouse entirely, "
-                        + "like part of the HUD. Also: /opener lock, /opener unlock", scale);
+        Widgets.Tooltip("Unlocked: drag it anywhere and resize its width; its minimize and hide buttons are always there. "
+                        + "Locked: it ignores the mouse entirely, like part of the HUD. Also: /opener lock, /opener unlock", scale);
 
-        changed |= Widgets.Toggle("Hold Ctrl+Shift to reach it while locked##reach", ref settings.MenuWhileLocked, accent, scale);
-        Widgets.Tooltip("With both keys held the locked timeline takes the mouse again, so you can right-click it "
-                        + "for its menu without unlocking.", scale);
+        Widgets.SectionTitle("What is on it", accent, scale);
 
-        Widgets.Label("View", column, scale, "The full panel shows the whole plan. The compact strip is a small floating row with just "
-                                             + "what is coming up, and keeps the action to press in one fixed spot. Each view remembers "
-                                             + "its own position.");
-        changed |= Widgets.EnumCombo("##view", ref settings.View, v => v switch
+        Widgets.Label("Full panel layout", column, scale, "Two lanes: abilities sit raised and smaller between the GCDs they are woven into.");
+        row = new ChipRow(accent, scale);
+        changed |= row.Choice("Two lanes##layout", ref settings.Layout, TimelineLayoutMode.Staggered);
+        changed |= row.Choice("Flat row##layout", ref settings.Layout, TimelineLayoutMode.Inline);
+        row.End();
+
+        Widgets.Label("Full panel shows", column, scale, "The parts of the full panel. Switch off what you do not look at and it gets smaller.");
+        row = new ChipRow(accent, scale);
+        changed |= row.Flag("Header##full", ref settings.ShowHeader);
+        Widgets.Tooltip("Opener name, timer and result.", scale);
+        changed |= row.Flag("Key caps##full", ref settings.ShowKeybinds);
+        Widgets.Tooltip("What to press for each action, read live from your own hotbars and keybinds. An amber dash means "
+                        + "the action is not on any hotbar; a position like 3-7 means hotbar 3, slot 7 has no key bound.", scale);
+        changed |= row.Flag("GCD numbers and time##full", ref settings.ShowRuler);
+        Widgets.Tooltip("Under every GCD: which one it is and roughly how many seconds into the fight it happens, worked "
+                        + "out from your own GCD speed. An estimate - it assumes the GCD keeps rolling.", scale);
+        changed |= row.Flag("Lane labels##full", ref settings.ShowLaneLabels);
+        Widgets.Tooltip("\"GCD\" and \"oGCD\" at the left of the two lanes.", scale);
+        changed |= row.Flag("Progress bar##full", ref settings.ShowProgress);
+        Widgets.Tooltip("Shared by both views.", scale);
+        row.End();
+
+        Widgets.Label("Compact strip shows", column, scale, "The parts of the compact strip.");
+        row = new ChipRow(accent, scale);
+        changed |= row.Flag("Status line##compact", ref settings.CompactShowStatus);
+        Widgets.Tooltip("State, timer and counter, as a line of text above the strip.", scale);
+        changed |= row.Flag("Key caps##compact", ref settings.CompactShowKeybinds);
+        changed |= row.Flag("Cooldown markers##compact", ref settings.CompactShowBadges);
+        Widgets.Tooltip("Which cooldowns get one is set under Markers below.", scale);
+        changed |= row.Flag("Progress bar##compact", ref settings.ShowProgress);
+        Widgets.Tooltip("Shared by both views.", scale);
+        row.End();
+
+        Widgets.SectionTitle("Markers", accent, scale);
+
+        Widgets.Label("Cooldown markers", column, scale,
+                      "Small badges with the recast time. Teal: used every minute. Gold: used every two minutes.");
+        changed |= Widgets.EnumCombo("##badges", ref settings.CooldownBadges, v => v switch
         {
-            TimelineView.Expanded => "Full panel",
-            TimelineView.Compact => "Compact strip",
-            _ => "Automatic (full before the pull, compact once it starts)"
+            CooldownBadgeMode.Off => "Off",
+            CooldownBadgeMode.Burst => "60s and 120s cooldowns",
+            _ => "Every cooldown of 30s or more"
         });
 
-        Widgets.Label("Keep the result on screen", column, scale);
-        changed |= ImGui.SliderFloat("##linger", ref settings.ResultSeconds, 3f, 60f, "%.0f s");
-
-        Widgets.SectionTitle("Full panel", accent, scale);
-
-        Widgets.Label("Layout", column, scale, "Two lanes: abilities sit raised and smaller between the GCDs they are woven into.");
-        changed |= Widgets.EnumCombo("##layout", ref settings.Layout, v => v switch
+        Widgets.Label("Burst notes", column, scale,
+                      "A small \"GCD 4\" above your big cooldowns in the full panel: the global cooldown they go out on. "
+                      + "Handy for lining up with the rest of the party.");
+        changed |= Widgets.EnumCombo("##callouts", ref settings.BurstCallouts, v => v switch
         {
-            TimelineLayoutMode.Staggered => "Two lanes (oGCDs raised)",
-            _ => "Flat row"
+            BurstCallouts.Off => "Off",
+            BurstCallouts.TwoMinute => "Two minute cooldowns",
+            _ => "One and two minute cooldowns"
         });
 
-        Widgets.Label("Icon size", column, scale);
+        if (!Widgets.Fold("Sizes and fine tuning##more", ref moreTimeline, scale))
+            return changed;
+
+        Widgets.Label("Icon size, full panel", column, scale);
         changed |= ImGui.SliderFloat("##iconsize", ref settings.IconSize, 28f, 88f, "%.0f px");
+
+        Widgets.Label("Icon size, compact strip", column, scale);
+        changed |= ImGui.SliderFloat("##compactsize", ref settings.CompactIconSize, 24f, 64f, "%.0f px");
 
         Widgets.Label("oGCD icon size", column, scale, "Relative to a GCD icon. Applies to both views.");
         var offPercent = settings.OffGcdScale * 100f;
@@ -148,125 +210,52 @@ public sealed class SettingsView(IAppHost host, Action showGuide)
         Widgets.Label("Spacing", column, scale);
         changed |= ImGui.SliderFloat("##gap", ref settings.IconGap, 0f, 20f, "%.0f px");
 
-        Widgets.Label("Cooldown markers", column, scale,
-                      "Small badges with the recast time. Teal: used every minute. Gold: used every two minutes.");
-        changed |= Widgets.EnumCombo("##badges", ref settings.CooldownBadges, v => v switch
-        {
-            CooldownBadgeMode.Off => "Off",
-            CooldownBadgeMode.Burst => "60s and 120s cooldowns",
-            _ => "Every cooldown of 30s or more"
-        });
-
-        Widgets.Label("Burst notes", column, scale,
-                      "A small \"GCD 4\" above your big cooldowns: the global cooldown they go out on. Handy for lining "
-                      + "up with the rest of the party.");
-        changed |= Widgets.EnumCombo("##callouts", ref settings.BurstCallouts, v => v switch
-        {
-            BurstCallouts.Off => "Off",
-            BurstCallouts.TwoMinute => "Two minute cooldowns",
-            _ => "One and two minute cooldowns"
-        });
-
-        changed |= Widgets.Toggle("GCD numbers and estimated time##ruler", ref settings.ShowRuler, accent, scale);
-        Widgets.Tooltip("Under every GCD: which one it is and roughly how many seconds into the fight it happens, worked "
-                        + "out from your own GCD speed. An estimate - it assumes the GCD keeps rolling.", scale);
-
         changed |= Widgets.Toggle("Count the pre-pull cast as GCD 1##precast", ref settings.CountPrecast, accent, scale);
         Widgets.Tooltip("Guides differ: some start counting at the cast you begin before the pull, others at the first "
                         + "GCD after it. On: every GCD you press has a number.", scale);
 
-        changed |= Widgets.Toggle("Header (opener name, timer, result)##header", ref settings.ShowHeader, accent, scale);
-        changed |= Widgets.Toggle("Lane labels (GCD / oGCD)##lanes", ref settings.ShowLaneLabels, accent, scale);
-        changed |= Widgets.Toggle("Progress bar##progress", ref settings.ShowProgress, accent, scale);
-
-        Widgets.SectionTitle("Compact strip", accent, scale);
-
-        Widgets.Label("Icon size", column, scale);
-        changed |= ImGui.SliderFloat("##compactsize", ref settings.CompactIconSize, 24f, 64f, "%.0f px");
-
-        changed |= Widgets.Toggle("Status line above it (state, timer, counter)##cstatus", ref settings.CompactShowStatus, accent, scale);
-        changed |= Widgets.Toggle("Key caps##ckeys", ref settings.CompactShowKeybinds, accent, scale);
-        changed |= Widgets.Toggle("Cooldown markers##cbadges", ref settings.CompactShowBadges, accent, scale);
+        changed |= Widgets.Toggle("Hold Ctrl+Shift to reach it while locked##reach", ref settings.MenuWhileLocked, accent, scale);
+        Widgets.Tooltip("With both keys held the locked timeline takes the mouse again, so you can use its buttons and "
+                        + "right-click it for its menu without unlocking.", scale);
 
         return changed;
     }
 
-    // ---- When it shows ----
+    // ---- Behaviour ----
 
-    private static bool DrawVisibility(Settings settings, Vector3 accent, float scale)
+    private bool DrawBehaviour(Settings settings, Vector3 accent, float scale, float column)
     {
         var changed = false;
 
-        Widgets.SectionTitle("Before the pull, bring the timeline up when...", accent, scale);
-        Widgets.Note("While an opener is running, and for a moment afterwards with the result, it is always there. "
-                     + "These decide when it appears on its own beforehand, so it is out of the way the rest of the time.");
-        ImGui.Dummy(new Vector2(0f, 2f * scale));
+        Widgets.SectionTitle("When it is there", accent, scale);
 
-        changed |= Widgets.Toggle("I target a striking dummy##dummy", ref settings.ShowAtDummy, accent, scale);
-        changed |= Widgets.Toggle("I target any enemy##enemy", ref settings.ShowOnEnemyTarget, accent, scale);
-        changed |= Widgets.Toggle("I am inside a trial or raid##boss", ref settings.ShowInBossDuties, accent, scale);
+        Widgets.Label("Comes up before the pull", column, scale,
+                      "While an opener is running, and for a moment afterwards with the result, the timeline is always "
+                      + "there. These decide when it appears on its own beforehand, so it is out of the way the rest of the time.");
+        var row = new ChipRow(accent, scale);
+        changed |= row.Flag("Targeting a dummy##dummy", ref settings.ShowAtDummy);
+        changed |= row.Flag("Targeting an enemy##enemy", ref settings.ShowOnEnemyTarget);
+        changed |= row.Flag("In a trial or raid##boss", ref settings.ShowInBossDuties);
         Widgets.Tooltip("There it comes up as soon as you zone in, so it is ready during the countdown without needing a target.", scale);
-        changed |= Widgets.Toggle("Always, wherever openers are followed##always", ref settings.ShowAlways, accent, scale);
+        changed |= row.Flag("Always##always", ref settings.ShowAlways);
+        Widgets.Tooltip("Wherever openers are followed.", scale);
+        row.End();
 
-        Widgets.SectionTitle("Follow my opener in...", accent, scale);
-        Widgets.Note("Where the plugin watches what you press at all. Anywhere that is switched off, the timeline stays hidden.");
-        ImGui.Dummy(new Vector2(0f, 2f * scale));
-
-        changed |= Widgets.Toggle("The open world and housing (striking dummies)##world", ref settings.TrackOpenWorld, accent, scale);
-        changed |= Widgets.Toggle("Trials (including Extreme and Unreal)##trials", ref settings.TrackTrials, accent, scale);
-        changed |= Widgets.Toggle("Raids (including Savage)##raids", ref settings.TrackRaids, accent, scale);
-        changed |= Widgets.Toggle("Ultimate raids##ultimates", ref settings.TrackUltimates, accent, scale);
-        changed |= Widgets.Toggle("Alliance raids##alliance", ref settings.TrackAllianceRaids, accent, scale);
-        changed |= Widgets.Toggle("Dungeons##dungeons", ref settings.TrackDungeons, accent, scale);
+        Widgets.Label("Follows my opener in", column, scale,
+                      "Where the plugin watches what you press at all. Anywhere that is switched off, the timeline stays hidden.");
+        row = new ChipRow(accent, scale);
+        changed |= row.Flag("Open world##world", ref settings.TrackOpenWorld);
+        Widgets.Tooltip("And housing: this is where the striking dummies are.", scale);
+        changed |= row.Flag("Trials##trials", ref settings.TrackTrials);
+        Widgets.Tooltip("Including Extreme and Unreal.", scale);
+        changed |= row.Flag("Raids##raids", ref settings.TrackRaids);
+        Widgets.Tooltip("Including Savage.", scale);
+        changed |= row.Flag("Ultimates##ultimates", ref settings.TrackUltimates);
+        changed |= row.Flag("Alliance raids##alliance", ref settings.TrackAllianceRaids);
+        changed |= row.Flag("Dungeons##dungeons", ref settings.TrackDungeons);
         Widgets.Tooltip("Every pack counts as a pull there, so expect the timeline to react to each one.", scale);
-        changed |= Widgets.Toggle("Other duties##other", ref settings.TrackOtherDuties, accent, scale);
-
-        return changed;
-    }
-
-    // ---- Key hints ----
-
-    private static bool DrawHints(Settings settings, Vector3 accent, float scale, float column)
-    {
-        var changed = false;
-
-        Widgets.SectionTitle("Key hints", accent, scale);
-
-        changed |= Widgets.Toggle("Show what to press for each action##hints", ref settings.ShowKeybinds, accent, scale);
-        Widgets.Tooltip("Read live from your own hotbars and keybinds. An amber dash means the action is not on any of "
-                        + "your hotbars; a position like 3-7 means hotbar 3, slot 7 has no key bound.", scale);
-
-        Widgets.Label("Modifier style", column, scale);
-        changed |= Widgets.EnumCombo("##hintstyle", ref settings.KeybindStyle, v => v switch
-        {
-            KeybindStyle.Auto => "Automatic (ctrl 1 in the full panel, c 1 in the compact strip)",
-            KeybindStyle.Full => "Always spelled out (ctrl 1)",
-            _ => "Always letters, like the game's hotbars (c 1)"
-        });
-
-        Widgets.Label("Read hints from", column, scale);
-        changed |= Widgets.EnumCombo("##hintsource", ref settings.HintSource, v => v switch
-        {
-            HintSource.Auto => "Automatic (follows your gamepad mode)",
-            HintSource.Keyboard => "Hotbars and keyboard",
-            _ => "Cross hotbar"
-        });
-
-        Widgets.Label("Controller labels", column, scale);
-        changed |= Widgets.EnumCombo("##pad", ref settings.PadGlyphs, v => v switch
-        {
-            PadGlyphs.Xbox => "LT / RT",
-            _ => "L2 / R2"
-        });
-
-        return changed;
-    }
-
-    // ---- Practice ----
-
-    private bool DrawPractice(Settings settings, Vector3 accent, float scale, float column)
-    {
-        var changed = false;
+        changed |= row.Flag("Other duties##other", ref settings.TrackOtherDuties);
+        row.End();
 
         Widgets.SectionTitle("Mistakes", accent, scale);
 
@@ -306,31 +295,39 @@ public sealed class SettingsView(IAppHost host, Action showGuide)
             host.PlaySound(settings.MistakeSound);
         ImGui.EndDisabled();
 
-        changed |= Widgets.Toggle("Stop at the first mistake##strict", ref settings.StopAtFirstMistake, accent, scale);
+        Widgets.Label("Rules", column, scale);
+        row = new ChipRow(accent, scale);
+        changed |= row.Flag("Stop at the first mistake##strict", ref settings.StopAtFirstMistake);
         Widgets.Tooltip("Off (recommended): a wrong press is noted and you carry on; a step you skipped is marked and "
                         + "the timeline jumps ahead with you.", scale);
+        changed |= row.Flag("Ignore Sprint and role actions##utility", ref settings.IgnoreUtilityActions);
+        Widgets.Tooltip("True North, Second Wind, Arm's Length and friends never count as mistakes when they are not "
+                        + "part of the opener.", scale);
+        row.End();
 
-        changed |= Widgets.Toggle("Ignore Sprint and role actions that are not in the opener##utility", ref settings.IgnoreUtilityActions,
-                                  accent, scale);
-        Widgets.Tooltip("True North, Second Wind, Arm's Length and friends never count as mistakes.", scale);
-
-        Widgets.SectionTitle("Helpers", accent, scale);
-
-        changed |= Widgets.Toggle("Fit openers to my level##levels", ref settings.AutoAdjustLevel, accent, scale);
+        Widgets.Label("Helpers", column, scale);
+        row = new ChipRow(accent, scale);
+        changed |= row.Flag("Fit openers to my level##levels", ref settings.AutoAdjustLevel);
         Widgets.Tooltip("Below the level an opener was written for - synced content, an old Ultimate, a job you are still "
                         + "levelling - actions you do not have are left out and upgraded ones fall back to the version "
                         + "you do have. An approximation, but it keeps the timeline playable.", scale);
-
-        changed |= Widgets.Toggle("Highlight the next action on my hotbar##ants", ref settings.AbilityAnts, accent, scale);
+        changed |= row.Flag("Highlight the next action on my hotbar##ants", ref settings.AbilityAnts);
         Widgets.Tooltip("Uses the game's own proc highlight (the dotted outline).", scale);
+        changed |= row.Flag("Large countdown numbers##bigcd", ref settings.BigCountdown);
+        Widgets.Tooltip("The practice countdown also counts down in the middle of the screen, like the game's own.", scale);
+        row.End();
+
+        if (!Widgets.Fold("Timing and countdown##more", ref moreBehaviour, scale))
+            return changed;
+
+        Widgets.Label("Keep the result on screen", column, scale);
+        changed |= ImGui.SliderFloat("##linger", ref settings.ResultSeconds, 3f, 60f, "%.0f s");
 
         Widgets.Label("Give up after no input for", column, scale);
         changed |= ImGui.SliderFloat("##idle", ref settings.IdleTimeoutSeconds, 5f, 60f, "%.0f s");
 
         Widgets.Label("Countdown length", column, scale, "Start one with /opener cd, from the Results tab or the timeline's menu.");
         changed |= ImGui.SliderInt("##countdown", ref settings.CountdownSeconds, 3, 30, "%d s");
-
-        changed |= Widgets.Toggle("Large countdown numbers in the middle of the screen##bigcd", ref settings.BigCountdown, accent, scale);
 
         return changed;
     }
@@ -346,10 +343,39 @@ public sealed class SettingsView(IAppHost host, Action showGuide)
     {
         var changed = false;
 
-        Widgets.SectionTitle("Presets", accent, scale);
+        Widgets.SectionTitle("Look", accent, scale);
         changed |= DrawPresets(settings, accent, scale);
 
-        Widgets.SectionTitle("Custom", accent, scale);
+        Widgets.SectionTitle("Accent colour", accent, scale);
+        changed |= DrawAccent(settings, scale);
+
+        Widgets.SectionTitle("Key caps", accent, scale);
+
+        Widgets.Label("Modifier style", column, scale);
+        changed |= Widgets.EnumCombo("##hintstyle", ref settings.KeybindStyle, v => v switch
+        {
+            KeybindStyle.Auto => "Automatic (ctrl 1 in the full panel, c 1 in the compact strip)",
+            KeybindStyle.Full => "Always spelled out (ctrl 1)",
+            _ => "Always letters, like the game's hotbars (c 1)"
+        });
+
+        Widgets.Label("Read them from", column, scale);
+        changed |= Widgets.EnumCombo("##hintsource", ref settings.HintSource, v => v switch
+        {
+            HintSource.Auto => "Automatic (follows your gamepad mode)",
+            HintSource.Keyboard => "Hotbars and keyboard",
+            _ => "Cross hotbar"
+        });
+
+        Widgets.Label("Controller labels", column, scale);
+        changed |= Widgets.EnumCombo("##pad", ref settings.PadGlyphs, v => v switch
+        {
+            PadGlyphs.Xbox => "LT / RT",
+            _ => "L2 / R2"
+        });
+
+        if (!Widgets.Fold("Opacity and blur##more", ref moreAppearance, scale))
+            return changed;
 
         Widgets.Label("Timeline opacity", column, scale, "How dark the panel behind the icons is.");
         var panelPercent = settings.PanelOpacity * 100f;
@@ -374,9 +400,6 @@ public sealed class SettingsView(IAppHost host, Action showGuide)
             settings.WindowOpacity = windowPercent / 100f;
             changed = true;
         }
-
-        Widgets.SectionTitle("Accent colour", accent, scale);
-        changed |= DrawAccent(settings, scale);
 
         return changed;
     }
@@ -500,25 +523,26 @@ public sealed class SettingsView(IAppHost host, Action showGuide)
                 dl.AddCircle(center, radius, Palette.Pack(Palette.White, 0.95f), 28, MathF.Max(1.5f, 2f * scale));
         }
 
-        ImGui.Dummy(new Vector2(0f, 2f * scale));
-
-        // Any other colour: type its hex code or pick it.
+        // Any other colour, on the same line when there is room: type its hex code or pick it.
         if (settings.Accent != hexFor)
         {
             hexFor = settings.Accent;
             hexText = Appearance.ToHex(settings.Accent);
         }
 
-        ImGui.AlignTextToFramePadding();
-        Widgets.TextDim("Hex");
-        ImGui.SameLine();
-        ImGui.SetNextItemWidth(120f * scale);
+        var hexWidth = 96f * scale;
+        if (ImGui.GetContentRegionAvail().X - (ImGui.GetItemRectMax().X - ImGui.GetCursorScreenPos().X) > hexWidth + 70f * scale)
+            ImGui.SameLine(0f, 16f * scale);
+
+        ImGui.SetNextItemWidth(hexWidth);
         if (ImGui.InputText("##hex", ref hexText, 8) && Appearance.TryParseHex(hexText, out var typed))
         {
             settings.Accent = typed;
             hexFor = typed; // leave what is being typed alone
             changed = true;
         }
+
+        Widgets.Tooltip("The colour as a hex code. The first swatch is Material UI's default accent.", scale);
 
         ImGui.SameLine();
         var picked = settings.Accent;
@@ -530,50 +554,6 @@ public sealed class SettingsView(IAppHost host, Action showGuide)
 
         Widgets.Tooltip("Pick any colour.", scale);
 
-        ImGui.SameLine();
-        Widgets.TextFaint("The first swatch is Material UI's default accent.");
-
         return changed;
-    }
-
-    // ---- About ----
-
-    private void DrawAbout(Vector3 accent, float scale)
-    {
-        Widgets.SectionTitle("About", accent, scale);
-        Widgets.Note($"Opener Timeline {host.Version}. A fork of OpenerCreator by Infi, herulume and sevii, rebuilt around a live "
-                     + "timeline. The bundled openers are the ones published by The Balance. Licensed AGPL-3.0-or-later.");
-
-        ImGui.Dummy(new Vector2(0f, 2f * scale));
-        if (Widgets.PrimaryButton("How to use", accent))
-            showGuide();
-        ImGui.SameLine();
-        if (ImGui.Button("OpenerCreator (original)"))
-            host.OpenLink("https://github.com/Infiziert90/OpenerCreator");
-        ImGui.SameLine();
-        if (ImGui.Button("The Balance"))
-            host.OpenLink("https://www.thebalanceffxiv.com/");
-
-        Widgets.SectionTitle("Commands", accent, scale);
-        Command("/opener", "Open this window");
-        Command("/opener guide", "Open the walkthrough");
-        Command("/opener settings", "Open the settings");
-        Command("/opener unlock  |  lock", "Free the timeline to move it, or pin it");
-        Command("/opener view full | compact | auto", "Switch between the full panel and the compact strip");
-        Command("/opener toggle", "Show or hide the timeline");
-        Command("/opener reset", "Abandon the current attempt");
-        Command("/opener cd [seconds]", "Start a private practice countdown");
-
-        Widgets.SectionTitle("A note on the numbers", accent, scale);
-        Widgets.Note("The Balance publishes its openers as pictures, so there is nothing for a plugin to download and keep in "
-                     + "sync. The times and GCD numbers on the timeline are worked out from the game's own data and your "
-                     + "current GCD speed instead. Treat them as a plan, not a promise.");
-    }
-
-    private void Command(string command, string description)
-    {
-        ImGui.TextUnformatted(command);
-        ImGui.SameLine(300f * host.Scale);
-        Widgets.TextDim(description);
     }
 }

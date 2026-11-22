@@ -135,6 +135,12 @@ public sealed class TimelineFrame
     /// <summary>The overlay can be moved and resized right now.</summary>
     public bool Unlocked;
 
+    /// <summary>Draw the minimize and hide buttons; set while the mouse can reach the overlay.</summary>
+    public bool Controls;
+
+    /// <summary>Which of those buttons the mouse is over: 0 minimize, 1 hide, negative for neither.</summary>
+    public int HoveredControl = -1;
+
     /// <summary>Shown instead of the strip when there is nothing to practice.</summary>
     public string? Notice;
 }

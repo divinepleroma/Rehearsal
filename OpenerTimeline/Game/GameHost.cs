@@ -51,6 +51,12 @@ internal sealed class GameHost : IAppHost, IDisposable
     public Jobs CurrentJob => trainer?.CurrentJob ?? Jobs.ANY;
     public string Version => Plugin.PluginInterface.Manifest.AssemblyVersion.ToString(3);
 
+    /// <summary>
+    /// Where the timeline was last drawn this session, so the tab it minimizes to can first
+    /// appear in its place.
+    /// </summary>
+    public Vector2? TimelinePosition { get; set; }
+
     public void Attach(Trainer value)
     {
         trainer = value;

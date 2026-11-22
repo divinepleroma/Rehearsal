@@ -16,6 +16,10 @@ and sevii, rebuilt around a live overlay. The bundled openers are the ones publi
   row with only what is coming up, and keeps the action to press in one fixed spot. Each view
   remembers its own position; *automatic* shows the panel before the pull and the strip once the
   opener is under way.
+- **Out of the way when you want it to be.** Two small buttons on the timeline minimize it to a
+  tab or hide it; they appear whenever the mouse can reach it (unlocked, or with Ctrl+Shift held).
+  Minimized, a small pill stays behind with where the run stands, and a click on it brings the
+  timeline back. The same shown / minimized / hidden switch sits at the top of the plugin window.
 - **One line, two lanes.** GCDs sit on the line, oGCDs are raised and smaller between the GCDs
   they are woven into, so the weave structure is visible at a glance. A flat single-row layout
   is available too.
@@ -48,7 +52,10 @@ and sevii, rebuilt around a live overlay. The bundled openers are the ones publi
   (Dalamud's backdrop blur) and the game's own font. Looks come as presets (Acrylic, Glass,
   Smoke, Solid, Ghost) with sliders underneath; the accent has a palette, a hex field and a
   picker, and defaults to Material UI's.
-- **A walkthrough.** The "How to use" tab explains all of this with the real thing drawn next to
+- **Few menus.** Settings are three pages, with related switches sharing a row and the
+  set-once sliders folded away; the right-click menu only offers what belongs to the view you
+  clicked.
+- **A walkthrough.** The "Guide" tab explains all of this with the real thing drawn next to
   the words. It opens by itself the first time.
 
 Openers you saved in OpenerCreator are imported on first start; the originals are left alone.
@@ -60,14 +67,17 @@ Openers you saved in OpenerCreator are imported on first start; the originals ar
 | `/opener` | Open the opener library |
 | `/opener guide` | Open the walkthrough |
 | `/opener settings` | Open the settings |
+| `/opener show` / `min` / `hide` | Show the timeline, minimize it to a small tab, or hide it |
+| `/opener toggle` | Flip between shown and hidden |
 | `/opener unlock` / `/opener lock` | Free the timeline to move and resize it, or pin it |
 | `/opener view full` / `compact` / `auto` | Switch between the full panel and the compact strip |
-| `/opener toggle` | Show or hide the timeline |
 | `/opener reset` | Abandon the current attempt |
 | `/opener cd [seconds]` | Start a private practice countdown |
 
-Right-click the timeline for a menu with all of this plus opener switching and show/hide
-switches for each part. When it is locked, hold Ctrl+Shift while you right-click.
+None of these are needed: the timeline has minimize and hide buttons, the plugin window has the
+shown / minimized / hidden switch on every tab, and right-clicking the timeline (or its tab)
+opens a menu with opener switching, the view, and the parts of that view. When it is locked,
+hold Ctrl+Shift to reach it.
 
 ## About the numbers
 

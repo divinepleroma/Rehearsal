@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Numerics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using OpenerTimeline.UI;
 using OpenerTimeline.UI.Timeline;
 
@@ -29,6 +30,18 @@ public enum TimelineView
     Automatic
 }
 
+/// <summary>Whether the timeline is on the HUD at all.</summary>
+public enum TimelinePresence
+{
+    Shown,
+
+    /// <summary>Tucked away as a small tab that brings it back when clicked. Openers are still followed.</summary>
+    Minimized,
+
+    /// <summary>Off: nothing is drawn and nothing is followed.</summary>
+    Hidden
+}
+
 public sealed class SavedSelection
 {
     public bool IsDefault { get; set; }
@@ -38,7 +51,7 @@ public sealed class SavedSelection
 /// <summary>Everything the player can configure. Plain data: no Dalamud types, so tools can use it too.</summary>
 public sealed class Settings
 {
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -52,6 +65,9 @@ public sealed class Settings
 
     // ---- Timeline ----
     public bool OverlayEnabled = true;
+
+    /// <summary>Shown as a small tab instead of the timeline. Only means something while it is enabled.</summary>
+    public bool OverlayMinimized;
 
     /// <summary>Starts unlocked so it can be dragged into place first.</summary>
     public bool OverlayLocked;
@@ -103,7 +119,10 @@ public sealed class Settings
     // ---- Compact view ----
     public float CompactIconSize = 40f;
     public bool CompactShowStatus = true;
+
+    /// <summary>Key caps in the compact strip; <see cref="ShowKeybinds"/> is the same switch for the full panel.</summary>
     public bool CompactShowKeybinds = true;
+
     public bool CompactShowBadges = true;
 
     // ---- Look ----
@@ -113,6 +132,7 @@ public sealed class Settings
     public float WindowOpacity = 0.78f;
 
     // ---- Keybind hints ----
+    /// <summary>Key caps in the full panel.</summary>
     public bool ShowKeybinds = true;
     public KeybindStyle KeybindStyle = KeybindStyle.Auto;
     public HintSource HintSource = HintSource.Auto;
@@ -162,6 +182,22 @@ public sealed class Settings
     /// <summary>The walkthrough has been opened once on its own.</summary>
     public bool GuideShown;
 
+    /// <summary>
+    /// The two on/off switches as the one choice the player makes. Hiding keeps the minimized
+    /// flag, so showing the timeline again brings it back the way it was.
+    /// </summary>
+    [JsonIgnore]
+    public TimelinePresence Presence
+    {
+        get => !OverlayEnabled ? TimelinePresence.Hidden : OverlayMinimized ? TimelinePresence.Minimized : TimelinePresence.Shown;
+        set
+        {
+            OverlayEnabled = value != TimelinePresence.Hidden;
+            if (value != TimelinePresence.Hidden)
+                OverlayMinimized = value == TimelinePresence.Minimized;
+        }
+    }
+
     /// <summary>The key under which the choice for a job at a level cap is stored.</summary>
     public static string SelectionKey(string job, int levelCap, int maxLevel)
     {
@@ -191,7 +227,7 @@ public sealed class Settings
             style.IconSize = CompactIconSize;
             style.Layout = TimelineLayoutMode.Inline;
             style.ShowStatus = CompactShowStatus;
-            style.ShowHints = ShowKeybinds && CompactShowKeybinds;
+            style.ShowHints = CompactShowKeybinds;
             style.Badges = CompactShowBadges ? CooldownBadges : CooldownBadgeMode.Off;
             style.Callouts = BurstCallouts.Off;
         }
@@ -313,6 +349,14 @@ public sealed class Settings
             // Automatic does exactly that today, and switches to letters in the compact strip.
             if (settings.KeybindStyle == KeybindStyle.Full)
                 settings.KeybindStyle = KeybindStyle.Auto;
+        }
+
+        if (settings.Version < 4)
+        {
+            // Key caps used to have a master switch with the compact strip's own switch under it.
+            // Each view now has just its own, so "off everywhere" has to be spelled out for both.
+            if (!settings.ShowKeybinds)
+                settings.CompactShowKeybinds = false;
         }
 
         settings.Version = CurrentVersion;

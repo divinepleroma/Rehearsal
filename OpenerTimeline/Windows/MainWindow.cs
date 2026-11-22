@@ -25,7 +25,8 @@ internal sealed class MainWindow : Window
         SizeCondition = ImGuiCond.FirstUseEver;
         SizeConstraints = new WindowSizeConstraints
         {
-            MinimumSize = new Vector2(640, 420),
+            // Wide enough for the navigation and the shown / minimized / hidden switch beside it.
+            MinimumSize = new Vector2(700, 420),
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue)
         };
 

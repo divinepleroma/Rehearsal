@@ -255,7 +255,8 @@ internal sealed class Trainer : ITrainer, IDisposable
 
     public KeyHint HintFor(int stepId, bool isCurrent)
     {
-        return settings.ShowKeybinds ? hints.Get(stepId, isCurrent) : default;
+        // Each view has its own key cap switch; only when both are off is there nothing to look up.
+        return settings.ShowKeybinds || settings.CompactShowKeybinds ? hints.Get(stepId, isCurrent) : default;
     }
 
     // ---- Input from the game ----

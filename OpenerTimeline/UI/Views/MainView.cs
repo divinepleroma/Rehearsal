@@ -1,3 +1,4 @@
+using System;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using OpenerTimeline.Data;
@@ -16,6 +17,8 @@ public sealed class MainView
         Guide
     }
 
+    private static readonly string[] PresenceLabels = ["Shown", "Minimized", "Hidden"];
+
     private readonly EditorView editor;
     private readonly GuideView guide;
     private readonly IAppHost host;
@@ -30,8 +33,8 @@ public sealed class MainView
         editor = new EditorView(host, () => library!.Invalidate());
         library = new LibraryView(host, Edit);
         results = new ResultsView(host);
-        settings = new SettingsView(host, () => Show(Section.Guide));
-        guide = new GuideView(host, Show, ShowSettings);
+        settings = new SettingsView(host);
+        guide = new GuideView(host, Show, page => ShowSettings(page));
     }
 
     public void Show(Section target)
@@ -39,10 +42,10 @@ public sealed class MainView
         section = (int)target;
     }
 
-    /// <summary>Opens the settings on a particular page.</summary>
-    public void ShowSettings(SettingsView.Page page)
+    /// <summary>Opens the settings on a particular page, optionally with its folded part open.</summary>
+    public void ShowSettings(SettingsView.Page page, bool unfolded = false)
     {
-        settings.Show(page);
+        settings.Show(page, unfolded);
         section = (int)Section.Settings;
     }
 
@@ -67,10 +70,15 @@ public sealed class MainView
 
         var rowStart = ImGui.GetCursorScreenPos();
         var rowWidth = ImGui.GetContentRegionAvail().X;
-        Widgets.SegmentedTabs("##sections", ["Openers", "Editor", "Results", "Settings", "How to use"], ref section, accent, scale);
+        Widgets.SegmentedTabs("##sections", ["Openers", "Editor", "Results", "Settings", "Guide"], ref section, accent, scale);
         var tabsWidth = ImGui.GetItemRectSize().X;
-        DrawActiveSummary(rowStart, rowWidth, tabsWidth, scale, accent);
+        var below = ImGui.GetCursorScreenPos();
 
+        var right = rowStart.X + rowWidth;
+        right -= DrawPresence(rowStart, right, rowWidth - tabsWidth, scale, accent);
+        DrawActiveSummary(rowStart, right, tabsWidth, scale, accent);
+
+        ImGui.SetCursorScreenPos(below);
         ImGui.Dummy(new Vector2(0f, 2f * scale));
 
         switch ((Section)section)
@@ -93,14 +101,54 @@ public sealed class MainView
         }
     }
 
+    /// <summary>
+    /// Shown, minimized or hidden: the one switch that has to be reachable from every tab, since
+    /// a hidden timeline cannot offer it itself. Returns the width it took at the right of the row.
+    /// </summary>
+    private float DrawPresence(Vector2 rowStart, float right, float room, float scale, Vector3 accent)
+    {
+        var settings = host.Settings;
+        var width = Widgets.SegmentedWidth(PresenceLabels, scale, true);
+        var gap = MathF.Round(14f * scale);
+        if (room < width + gap)
+            return 0f;
+
+        var rowHeight = Widgets.SegmentedHeight(scale);
+        var height = Widgets.SegmentedHeight(scale, true);
+        var top = rowStart.Y + MathF.Round((rowHeight - height) * 0.5f);
+
+        ImGui.SetCursorScreenPos(new Vector2(MathF.Round(right - width), top));
+        var presence = (int)settings.Presence;
+        if (Widgets.SegmentedTabs("##presence", PresenceLabels, ref presence, accent, scale, true))
+        {
+            settings.Presence = (TimelinePresence)presence;
+            host.SaveSettings();
+        }
+
+        Widgets.Tooltip("The timeline on your HUD.\n\n"
+                        + "Minimized tucks it away as a small tab that brings it back when clicked; your opener is still "
+                        + "followed.\n\nHidden switches it off altogether.", scale);
+
+        // Say what the three words are about, if there is still room for that.
+        const string label = "Timeline";
+        var labelSize = ImGui.CalcTextSize(label);
+        var labelRoom = labelSize.X + MathF.Round(8f * scale);
+        if (room < width + gap + labelRoom)
+            return width + gap;
+
+        ImGui.GetWindowDrawList().AddText(
+            new Vector2(MathF.Round(right - width - labelRoom), MathF.Round(rowStart.Y + (rowHeight - labelSize.Y) * 0.5f)),
+            Palette.Pack(Palette.White, Palette.TextFaintAlpha), label);
+        return width + gap + labelRoom;
+    }
+
     /// <summary>What is being practised right now, right-aligned next to the navigation.</summary>
-    private void DrawActiveSummary(Vector2 rowStart, float rowWidth, float tabsWidth, float scale, Vector3 accent)
+    private void DrawActiveSummary(Vector2 rowStart, float right, float tabsWidth, float scale, Vector3 accent)
     {
         var trainer = host.Trainer;
         var dl = ImGui.GetWindowDrawList();
         var centerY = rowStart.Y + 16f * scale;
-        var right = rowStart.X + rowWidth;
-        var room = rowWidth - tabsWidth - 24f * scale;
+        var room = right - rowStart.X - tabsWidth - 24f * scale;
 
         if (trainer.ActiveActions.Count == 0)
         {

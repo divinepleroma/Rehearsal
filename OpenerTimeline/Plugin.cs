@@ -62,6 +62,9 @@ public sealed class Plugin : IDalamudPlugin
         windowSystem.AddWindow(new TimelineOverlay(host, trainer, false, mainWindow.Show));
         windowSystem.AddWindow(new TimelineOverlay(host, trainer, true, mainWindow.Show));
 
+        // And the small tab that stands in for them while the timeline is minimized.
+        windowSystem.AddWindow(new MinimizedTab(host, trainer, mainWindow.Show));
+
         PluginInterface.UiBuilder.Draw += Draw;
         PluginInterface.UiBuilder.OpenMainUi += OpenMainUi;
         PluginInterface.UiBuilder.OpenConfigUi += OpenConfigUi;
@@ -71,9 +74,10 @@ public sealed class Plugin : IDalamudPlugin
             HelpMessage = "Open the opener library.\n"
                           + "/opener guide → open the walkthrough\n"
                           + "/opener settings → open the settings\n"
+                          + "/opener show | min | hide → show the timeline, minimize it to a small tab, or hide it\n"
+                          + "/opener toggle → flip between shown and hidden\n"
                           + "/opener lock | unlock → pin the timeline, or free it so it can be moved\n"
                           + "/opener view full | compact | auto → switch between the full panel and the compact strip\n"
-                          + "/opener toggle → show or hide the timeline\n"
                           + "/opener reset → abandon the current attempt\n"
                           + "/opener cd [seconds] → start a practice countdown"
         });
@@ -167,15 +171,31 @@ public sealed class Plugin : IDalamudPlugin
                 Chat.Print("[Opener Timeline] Timeline locked. /opener unlock frees it again.");
                 break;
             case "unlock":
+                // Unlocking is for moving it, so it has to be there to be moved.
                 settings.OverlayLocked = false;
-                settings.OverlayEnabled = true;
+                settings.Presence = TimelinePresence.Shown;
                 host.SaveSettings();
                 Chat.Print("[Opener Timeline] Timeline unlocked: drag it into place, then /opener lock.");
                 break;
+            case "show":
+                SetPresence(TimelinePresence.Shown);
+                break;
+            case "min" or "minimize" or "minimise":
+                SetPresence(TimelinePresence.Minimized);
+                break;
+            case "hide":
+                SetPresence(TimelinePresence.Hidden);
+                break;
             case "toggle":
+                // Coming back, it is the way it was left: minimized stays minimized.
                 settings.OverlayEnabled = !settings.OverlayEnabled;
                 host.SaveSettings();
-                Chat.Print($"[Opener Timeline] Timeline {(settings.OverlayEnabled ? "shown" : "hidden")}.");
+                Chat.Print(settings.Presence switch
+                {
+                    TimelinePresence.Shown => "[Opener Timeline] Timeline shown.",
+                    TimelinePresence.Minimized => "[Opener Timeline] Timeline back, minimized. Click its tab to open it.",
+                    _ => "[Opener Timeline] Timeline hidden."
+                });
                 break;
             case "view":
                 SetView(parts.Length > 1 ? parts[1].ToLowerInvariant() : string.Empty);
@@ -199,9 +219,22 @@ public sealed class Plugin : IDalamudPlugin
                 trainer.StopCountdown();
                 break;
             default:
-                Chat.Print("[Opener Timeline] Unknown option. Try: guide, settings, lock, unlock, view full|compact|auto, toggle, reset, cd [seconds].");
+                Chat.Print("[Opener Timeline] Unknown option. Try: guide, settings, show, min, hide, toggle, lock, unlock, "
+                           + "view full|compact|auto, reset, cd [seconds].");
                 break;
         }
+    }
+
+    private void SetPresence(TimelinePresence presence)
+    {
+        settings.Presence = presence;
+        host.SaveSettings();
+        Chat.Print(presence switch
+        {
+            TimelinePresence.Shown => "[Opener Timeline] Timeline shown.",
+            TimelinePresence.Minimized => "[Opener Timeline] Timeline minimized. Click its tab, or /opener show, to open it again.",
+            _ => "[Opener Timeline] Timeline hidden. /opener show brings it back."
+        });
     }
 
     private void SetView(string name)

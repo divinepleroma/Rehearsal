@@ -1,3 +1,4 @@
+using System.Numerics;
 using OpenerTimeline.UI.Timeline;
 
 namespace OpenerTimeline.Tests;
@@ -103,6 +104,63 @@ public class TimelineLayoutTests
         Assert.True(both.TotalHeight > ruler.TotalHeight);
         Assert.True(both.RulerTop >= both.GcdChipTop + both.ChipHeight);
         Assert.True(both.CalloutTop + both.CalloutHeight <= both.OffChipTop);
+    }
+
+    [Theory]
+    [InlineData(false, true)]  // full panel, in its header
+    [InlineData(false, false)] // full panel without a header
+    [InlineData(true, true)]   // compact strip, on its status line
+    [InlineData(true, false)]  // compact strip without one
+    public void Controls_SitSideBySideInTheTopRightCorner(bool compact, bool band)
+    {
+        var style = compact ? TimelineStyle.DefaultCompact with { ShowStatus = band } : TimelineStyle.Default with { ShowHeader = band };
+        var m = TimelineLayout.Measure(style);
+        var min = new Vector2(100f, 200f);
+        var max = min + new Vector2(600f, m.TotalHeight);
+
+        var controls = TimelineLayout.Controls(style, m, min, max);
+
+        // Minimize first, then hide, level with each other and not touching.
+        Assert.True(controls.Size >= 14f);
+        Assert.Equal(controls.Minimize.Y, controls.Hide.Y);
+        Assert.True(controls.Minimize.X + controls.Size < controls.Hide.X);
+        Assert.Equal(controls.Minimize.X, controls.Left);
+
+        // Inside the overlay, in its right half.
+        Assert.True(controls.Minimize.Y >= min.Y);
+        Assert.True(controls.Hide.X + controls.Size <= max.X);
+        Assert.True(controls.Hide.Y + controls.Size <= max.Y);
+        Assert.True(controls.Minimize.X > (min.X + max.X) * 0.5f);
+    }
+
+    [Fact]
+    public void Controls_ShareTheHeaderOrStatusLineWhenThereIsOne()
+    {
+        var full = TimelineStyle.Default;
+        var m = TimelineLayout.Measure(full);
+        var inHeader = TimelineLayout.Controls(full, m, Vector2.Zero, new Vector2(800f, m.TotalHeight));
+
+        Assert.True(inHeader.Hide.Y >= m.Padding);
+        Assert.True(inHeader.Hide.Y + inHeader.Size <= m.Padding + m.HeaderHeight);
+
+        // The compact view's status line floats above its panel, and so do the buttons.
+        var compact = TimelineStyle.DefaultCompact;
+        var cm = TimelineLayout.Measure(compact);
+        var onStatusLine = TimelineLayout.Controls(compact, cm, Vector2.Zero, new Vector2(400f, cm.TotalHeight));
+
+        Assert.True(onStatusLine.Hide.Y + onStatusLine.Size <= cm.PanelTop);
+    }
+
+    [Fact]
+    public void Controls_ScaleWithTheUi()
+    {
+        var small = TimelineStyle.Default with { Scale = 1f };
+        var large = TimelineStyle.Default with { Scale = 2f };
+
+        var a = TimelineLayout.Controls(small, TimelineLayout.Measure(small), Vector2.Zero, new Vector2(800f, 200f));
+        var b = TimelineLayout.Controls(large, TimelineLayout.Measure(large), Vector2.Zero, new Vector2(1600f, 400f));
+
+        Assert.Equal(a.Size * 2f, b.Size);
     }
 
     [Fact]

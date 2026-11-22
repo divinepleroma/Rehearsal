@@ -94,12 +94,96 @@ internal static class TimelineScenes
         rows.Add(Scene(stage, "Full panel, flat row, countdown running", new Point(560, 60), 1180, dnc, "DNC", "Standard (The Balance)",
                        full with { Layout = TimelineLayoutMode.Inline }, _ => Start, frame => frame.Countdown = 4.2f));
 
-        // 9. Unlocked, narrow, gamepad hints.
-        rows.Add(Scene(stage, "Unlocked, narrow, gamepad hints", new Point(700, 560), 760, dnc, "DNC", "Standard (The Balance)",
-                       full with { HintStyle = KeybindStyle.Compact }, _ => Start, frame => frame.Unlocked = true, true));
+        // 9. Unlocked, narrow, gamepad hints: the minimize and hide buttons sit at the end of the header.
+        rows.Add(Scene(stage, "Unlocked, narrow, gamepad hints, with the minimize / hide buttons", new Point(700, 560), 760, dnc, "DNC",
+                       "Standard (The Balance)", full with { HintStyle = KeybindStyle.Compact }, _ => Start, frame =>
+                       {
+                           frame.Unlocked = true;
+                           frame.Controls = true;
+                       }, true));
+
+        // 10. Locked but reached with Ctrl+Shift, mouse over "hide"; no header, so the buttons take the corner.
+        rows.Add(Scene(stage, "Locked, reached with Ctrl+Shift, no header: buttons in the corner (hide hovered)", new Point(250, 560), 900,
+                       rdm90, "RDM", "Standard", full with { ShowHeader = false }, _ => Start, frame =>
+                       {
+                           frame.Controls = true;
+                           frame.HoveredControl = 1;
+                       }));
+
+        // 11. The compact strip with its buttons, mouse over "minimize".
+        rows.Add(Scene(stage, "Compact strip, unlocked: buttons on the status line (minimize hovered)", new Point(520, 610), 430, rdm90, "RDM",
+                       "Standard", compact, _ => Start, frame =>
+                       {
+                           frame.Unlocked = true;
+                           frame.Controls = true;
+                           frame.HoveredControl = 0;
+                       }));
+
+        // 12. Minimized: the tab in every state it can be in.
+        rows.Add(Tabs(stage, blm, compact));
 
         Stage.Stack(rows).Save(path);
         Console.WriteLine($"wrote {path}");
+    }
+
+    /// <summary>The minimized tab, once per state, side by side.</summary>
+    private static Canvas Tabs(Stage stage, List<int> actions, TimelineStyle style)
+    {
+        var catalog = stage.Host.Catalog;
+
+        TimelineFrame Frame(Func<TrainerSession, double> play, Action<TimelineFrame>? tweak = null)
+        {
+            var session = new TrainerSession(actions, new ActionMatcher(catalog.GetName));
+            var now = play(session);
+            var frame = new TimelineFrame { JobLabel = "BLM", RunId = 1 };
+            new TimelineFrameBuilder(catalog).Build(frame, actions, session, null, now);
+            tweak?.Invoke(frame);
+            return frame;
+        }
+
+        double PlayAll(TrainerSession session)
+        {
+            var t = Start;
+            foreach (var action in actions)
+            {
+                session.OnAction((uint)action, false, false, t);
+                t += 1.2;
+            }
+
+            return t;
+        }
+
+        (string Label, TimelineFrame Frame, bool Hovered)[] tabs =
+        [
+            ("waiting", Frame(_ => Start), false),
+            ("countdown", Frame(_ => Start, frame => frame.Countdown = 4.2f), false),
+            ("running", Frame(session => PlayMessy(session, actions, catalog)), false),
+            ("clean run", Frame(PlayAll), false),
+            ("unlocked, hovered", Frame(_ => Start, frame => frame.Unlocked = true), true),
+            ("no opener", Frame(_ => Start, frame =>
+            {
+                frame.Steps.Clear();
+                frame.JobLabel = string.Empty;
+            }), false)
+        ];
+
+        var margin = (int)MathF.Round(34f * stage.Scale);
+        var height = (int)MathF.Round(24f * stage.Scale) + margin * 2 + (int)MathF.Round(18f * stage.Scale);
+        return stage.Render(1280, height, new Point(520, 610), () =>
+        {
+            var dl = ImGui.GetBackgroundDrawList();
+            dl.AddText(new Vector2(14f, 6f), Palette.Pack(Palette.White, 0.85f), "Minimized: the tab that stays behind (click to bring the timeline back)");
+
+            var x = 40f;
+            foreach (var (label, frame, hovered) in tabs)
+            {
+                var size = TimelineTab.Measure(frame, style, stage.Host);
+                var pos = new Vector2(x, margin);
+                TimelineTab.Render(dl, pos, size, frame, style, stage.Host, hovered, 0.4);
+                dl.AddText(new Vector2(x, margin + size.Y + 6f), Palette.Pack(Palette.White, 0.6f), label);
+                x += MathF.Max(size.X, ImGui.CalcTextSize(label).X) + 28f * stage.Scale;
+            }
+        });
     }
 
     /// <summary>Nine steps in: one slip that was corrected, one weave forgotten, and a wrong press a moment ago.</summary>
@@ -209,21 +293,32 @@ internal static class WindowScenes
         Page("openers", () => view.Show(MainView.Section.Openers));
         Page("editor", () => view.Edit(new OpenerRef(Jobs.RDM, "Level 90 opener (mine)", false)));
         Page("results", () => view.Show(MainView.Section.Results));
+        // Each settings page twice: as it opens, and with what is folded away on it opened up.
         Page("settings-timeline", () => view.ShowSettings(SettingsView.Page.Timeline));
-        Page("settings-visibility", () => view.ShowSettings(SettingsView.Page.Visibility));
-        Page("settings-practice", () => view.ShowSettings(SettingsView.Page.Practice));
+        Page("settings-behaviour", () => view.ShowSettings(SettingsView.Page.Behaviour));
         Page("settings-appearance", () => view.ShowSettings(SettingsView.Page.Appearance));
+        Page("settings-timeline-unfolded", () => view.ShowSettings(SettingsView.Page.Timeline, true));
+        Page("settings-behaviour-unfolded", () => view.ShowSettings(SettingsView.Page.Behaviour, true));
+        Page("settings-appearance-unfolded", () => view.ShowSettings(SettingsView.Page.Appearance, true));
         Page("guide-1-idea", () => view.ShowGuide(0), 12);
         Page("guide-3-placing", () => view.ShowGuide(2), 12);
         Page("guide-4-reading", () => view.ShowGuide(3), 6);
         Page("guide-5-practising", () => view.ShowGuide(4), 12);
         Page("guide-7-levels", () => view.ShowGuide(6), 6);
+        Page("guide-8-commands", () => view.ShowGuide(7), 6);
 
-        RenderMenu(stage, host, outDir);
+        // The top bar with the timeline minimized, to see the switch in another position.
+        host.Settings.Presence = TimelinePresence.Minimized;
+        Page("openers-minimized", () => view.Show(MainView.Section.Openers));
+        host.Settings.Presence = TimelinePresence.Shown;
+
+        RenderMenu(stage, host, outDir, OverlayMenu.Origin.FullPanel, "menu");
+        RenderMenu(stage, host, outDir, OverlayMenu.Origin.CompactStrip, "menu-compact");
+        RenderMenu(stage, host, outDir, OverlayMenu.Origin.Tab, "menu-tab");
     }
 
-    /// <summary>The right-click menu of the timeline, opened over a compact strip.</summary>
-    private static void RenderMenu(Stage stage, PreviewHost host, string outDir)
+    /// <summary>The right-click menu, as it opens from the full panel, the compact strip or the minimized tab.</summary>
+    private static void RenderMenu(Stage stage, PreviewHost host, string outDir, OverlayMenu.Origin origin, string name)
     {
         var frameIndex = 0;
         var canvas = stage.Render(520, 520, new Point(600, 400), () =>
@@ -239,7 +334,7 @@ internal static class WindowScenes
                 ImGui.SetNextWindowPos(new Vector2(24f, 24f));
                 if (ImGui.BeginPopup("##overlayMenu"))
                 {
-                    OverlayMenu.Draw(host, _ => { }, _ => { });
+                    OverlayMenu.Draw(host, origin, _ => { }, _ => { });
                     ImGui.EndPopup();
                 }
             }
@@ -247,7 +342,7 @@ internal static class WindowScenes
             ImGui.End();
         }, 4);
 
-        var path = Path.Combine(outDir, "menu.png");
+        var path = Path.Combine(outDir, $"{name}.png");
         canvas.Save(path);
         Console.WriteLine($"wrote {path}");
     }

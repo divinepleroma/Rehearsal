@@ -168,6 +168,63 @@ public sealed class SettingsTests : IDisposable
     }
 
     [Fact]
+    public void BeforeVersionFour_KeyCapsOffEverywhere_StaysOffInBothViews()
+    {
+        // The compact strip's switch used to sit under a master switch; now each view has its own.
+        File.WriteAllText(path, """{ "Version": 3, "ShowKeybinds": false, "CompactShowKeybinds": true }""");
+
+        var loaded = Settings.Load(path);
+
+        Assert.False(loaded.ShowKeybinds);
+        Assert.False(loaded.CompactShowKeybinds);
+        Assert.False(loaded.ToStyle(1f, true).ShowHints);
+        Assert.Equal(Settings.CurrentVersion, loaded.Version);
+    }
+
+    [Fact]
+    public void KeyCaps_AreSwitchedPerView()
+    {
+        var settings = new Settings { ShowKeybinds = false, CompactShowKeybinds = true };
+
+        Assert.False(settings.ToStyle(1f).ShowHints);
+        Assert.True(settings.ToStyle(1f, true).ShowHints);
+    }
+
+    [Fact]
+    public void Presence_IsOneChoiceOverTheTwoSwitches()
+    {
+        var settings = new Settings();
+        Assert.Equal(TimelinePresence.Shown, settings.Presence);
+
+        settings.Presence = TimelinePresence.Minimized;
+        Assert.True(settings.OverlayEnabled);
+        Assert.True(settings.OverlayMinimized);
+
+        settings.Presence = TimelinePresence.Hidden;
+        Assert.False(settings.OverlayEnabled);
+        Assert.Equal(TimelinePresence.Hidden, settings.Presence);
+
+        // Hiding remembers that it was minimized, so switching it back on (/opener toggle) restores that.
+        settings.OverlayEnabled = true;
+        Assert.Equal(TimelinePresence.Minimized, settings.Presence);
+
+        settings.Presence = TimelinePresence.Shown;
+        Assert.True(settings.OverlayEnabled);
+        Assert.False(settings.OverlayMinimized);
+    }
+
+    [Fact]
+    public void Presence_SurvivesARoundTrip_WithoutBeingStoredItself()
+    {
+        var settings = new Settings { Presence = TimelinePresence.Minimized };
+
+        settings.Save(path);
+
+        Assert.DoesNotContain("\"Presence\"", File.ReadAllText(path));
+        Assert.Equal(TimelinePresence.Minimized, Settings.Load(path).Presence);
+    }
+
+    [Fact]
     public void CurrentVersion_KeepsAnExplicitChoice()
     {
         var settings = new Settings { KeybindStyle = KeybindStyle.Full };

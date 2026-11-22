@@ -61,26 +61,67 @@ public sealed class TimelineRenderer
 
         DrawPanel(dl, panelMin, max, frame, style, m, host, alpha);
 
+        // The buttons share the header (or status line) with its text, which stops short of them.
+        var controls = TimelineLayout.Controls(style, m, min, max);
+        var textRight = frame.Controls ? controls.Left - MathF.Round(8f * m.Scale) : float.MaxValue;
+
         if (style.Compact)
         {
             if (m.StatusHeight > 0f)
-                DrawStatusLine(dl, min, max, frame, style, m, host, alpha, time);
+                DrawStatusLine(dl, min, max, frame, style, m, host, alpha, time, textRight);
         }
         else if (style.ShowHeader)
         {
-            DrawHeader(dl, min, max, frame, style, m, host, alpha, time);
+            DrawHeader(dl, min, max, frame, style, m, host, alpha, time, textRight);
         }
 
         if (frame.Notice != null || frame.Steps.Count == 0)
         {
             DrawNotice(dl, panelMin, max, frame, m, host, alpha);
-            return;
+        }
+        else
+        {
+            DrawStrip(dl, min, max, frame, style, m, host, alpha, dt, time);
+
+            if (style.ShowProgress)
+                DrawProgress(dl, min, max, frame, style, m, alpha, dt);
         }
 
-        DrawStrip(dl, min, max, frame, style, m, host, alpha, dt, time);
+        if (frame.Controls)
+            DrawControls(dl, controls, frame.HoveredControl, m.Scale, alpha);
+    }
 
-        if (style.ShowProgress)
-            DrawProgress(dl, min, max, frame, style, m, alpha, dt);
+    /// <summary>Minimize and hide: two small buttons, drawn only while the mouse can reach the overlay.</summary>
+    private static void DrawControls(ImDrawListPtr dl, in TimelineControls controls, int hovered, float s, float alpha)
+    {
+        var size = new Vector2(controls.Size);
+        var rounding = MathF.Round(4f * s);
+        var thickness = MathF.Max(1.5f, 1.6f * s);
+
+        for (var i = 0; i < 2; i++)
+        {
+            var min = i == 0 ? controls.Minimize : controls.Hide;
+            var max = min + size;
+            var isHovered = hovered == i;
+
+            // Their own backing: without a header they sit on top of the icons.
+            dl.AddRectFilled(min, max, Palette.Pack(Palette.Surface, 0.72f * alpha), rounding);
+            dl.AddRectFilled(min, max, Palette.Pack(Palette.White, (isHovered ? 0.22f : 0.08f) * alpha), rounding);
+
+            var color = Palette.Pack(Palette.White, (isHovered ? 1f : Palette.TextDimAlpha) * alpha);
+            var center = new Vector2(MathF.Round((min.X + max.X) * 0.5f), MathF.Round((min.Y + max.Y) * 0.5f));
+            var reach = MathF.Round(controls.Size * 0.24f);
+            if (i == 0)
+            {
+                // A bar along the bottom: "put it down there".
+                var y = center.Y + reach;
+                dl.AddLine(new Vector2(center.X - reach, y), new Vector2(center.X + reach, y), color, thickness);
+            }
+            else
+            {
+                Gfx.Cross(dl, center, reach, color, thickness);
+            }
+        }
     }
 
     private static void DrawPanel(
@@ -106,12 +147,12 @@ public sealed class TimelineRenderer
 
     private void DrawHeader(
         ImDrawListPtr dl, Vector2 min, Vector2 max, TimelineFrame frame, in TimelineStyle style, in TimelineMetrics m,
-        ITimelineHost host, float alpha, double time)
+        ITimelineHost host, float alpha, double time, float textRight)
     {
         var s = m.Scale;
         var centerY = MathF.Round(min.Y + m.Padding + m.HeaderHeight * 0.5f);
         var leftX = min.X + m.Padding;
-        var rightX = max.X - m.Padding;
+        var rightX = MathF.Min(max.X - m.Padding, textRight);
         var gap = MathF.Round(10f * s);
         var total = frame.Steps.Count;
 
@@ -194,12 +235,12 @@ public sealed class TimelineRenderer
     /// </summary>
     private static void DrawStatusLine(
         ImDrawListPtr dl, Vector2 min, Vector2 max, TimelineFrame frame, in TimelineStyle style, in TimelineMetrics m,
-        ITimelineHost host, float alpha, double time)
+        ITimelineHost host, float alpha, double time, float textRight)
     {
         var s = m.Scale;
         var centerY = MathF.Round(min.Y + m.StatusHeight * 0.5f - s);
         var leftX = min.X + MathF.Round(4f * s);
-        var rightX = max.X - MathF.Round(4f * s);
+        var rightX = MathF.Min(max.X - MathF.Round(4f * s), textRight);
         var total = frame.Steps.Count;
         var gap = MathF.Round(7f * s);
 
@@ -238,7 +279,8 @@ public sealed class TimelineRenderer
             Gfx.ShadowText(dl, leftX, centerY, Palette.White, Palette.TextAlpha * alpha, FormatTime(frame.Elapsed));
     }
 
-    private static (string Text, Vector3 Color) StatusOf(TimelineFrame frame, in TimelineStyle style)
+    /// <summary>The run in a word or two ("READY", "CLEAN RUN"...) and its colour; empty when there is nothing to say.</summary>
+    public static (string Text, Vector3 Color) StatusOf(TimelineFrame frame, in TimelineStyle style)
     {
         if (frame.Steps.Count == 0)
             return (string.Empty, Palette.White);

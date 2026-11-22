@@ -15,7 +15,8 @@ namespace OpenerTimeline.Windows;
 /// <summary>
 /// The live timeline: a chromeless, translucent strip that sits on the HUD. Locked, it ignores the
 /// mouse completely; unlocked, it can be dragged around and resized in width.
-/// There is one instance for the full panel and one for the compact strip.
+/// There is one instance for the full panel and one for the compact strip. While the timeline is
+/// minimized neither draws; <see cref="MinimizedTab"/> stands in for them.
 /// </summary>
 internal sealed class TimelineOverlay : Window
 {
@@ -82,7 +83,7 @@ internal sealed class TimelineOverlay : Window
     }
 
     /// <summary>Unlocked, the overlay stays up even with nothing to show so it can be positioned.</summary>
-    private bool ShouldShow => Settings.OverlayEnabled && IsMyView && (trainer.WantsOverlay || !Settings.OverlayLocked);
+    private bool ShouldShow => Settings.Presence == TimelinePresence.Shown && IsMyView && (trainer.WantsOverlay || !Settings.OverlayLocked);
 
     public override void Update()
     {
@@ -114,6 +115,10 @@ internal sealed class TimelineOverlay : Window
                 Flags |= ImGuiWindowFlags.NoInputs;
         }
 
+        // On its way out after being minimized: the tab has the mouse now.
+        if (Settings.OverlayMinimized)
+            Flags |= ImGuiWindowFlags.NoInputs;
+
         // Fixed height (it follows from the icon size), free width. Window constraints are given
         // unscaled; Dalamud multiplies them by the global scale.
         SizeConstraints = new WindowSizeConstraints
@@ -142,6 +147,14 @@ internal sealed class TimelineOverlay : Window
     public override void Draw()
     {
         var locked = Settings.OverlayLocked;
+        var minimized = Settings.OverlayMinimized;
+
+        // Whether the mouse can do anything with the overlay right now.
+        var interactive = (!locked || reachable) && !minimized;
+        var pos = ImGui.GetWindowPos();
+        var size = ImGui.GetWindowSize();
+        if (!minimized)
+            host.TimelinePosition = pos;
 
         frame.RunId = trainer.RunId;
         frame.Title = trainer.ActiveTitle;
@@ -165,10 +178,35 @@ internal sealed class TimelineOverlay : Window
             builder.Build(frame, actions, trainer.Session, hintFor, Plugin.Now, trainer.Speed, Settings.CountPrecast);
         }
 
-        renderer.Render(ImGui.GetWindowDrawList(), ImGui.GetWindowPos(), ImGui.GetWindowSize(), frame, style, host,
-                        ImGui.GetIO().DeltaTime, ImGui.GetTime());
+        // Minimize and hide, as two small buttons at the top right. The buttons themselves are
+        // invisible ImGui items; the renderer draws them, so the preview tool shows them too.
+        frame.Controls = interactive;
+        frame.HoveredControl = -1;
+        if (interactive)
+        {
+            var controls = TimelineLayout.Controls(style, TimelineLayout.Measure(style), pos, pos + size);
+            var button = new Vector2(controls.Size);
 
-        if ((!locked || reachable) && ImGui.IsWindowHovered())
+            ImGui.SetCursorScreenPos(controls.Minimize);
+            if (ImGui.InvisibleButton("##minimize", button))
+                SetPresence(TimelinePresence.Minimized);
+            if (ImGui.IsItemHovered())
+                frame.HoveredControl = 0;
+
+            ImGui.SetCursorScreenPos(controls.Hide);
+            if (ImGui.InvisibleButton("##hide", button))
+            {
+                SetPresence(TimelinePresence.Hidden);
+                Notify(OverlayMenu.HiddenNotice);
+            }
+
+            if (ImGui.IsItemHovered())
+                frame.HoveredControl = 1;
+        }
+
+        renderer.Render(ImGui.GetWindowDrawList(), pos, size, frame, style, host, ImGui.GetIO().DeltaTime, ImGui.GetTime());
+
+        if (interactive && ImGui.IsWindowHovered())
         {
             // The wheel scrubs through the opener when it does not fit.
             var wheel = ImGui.GetIO().MouseWheel;
@@ -181,10 +219,31 @@ internal sealed class TimelineOverlay : Window
 
         // Submitted every frame: once open, the menu has to outlive the keys that let the mouse in.
         using var theme = Theme.Push(Settings.Accent, 0.96f, style.Scale);
+        switch (frame.HoveredControl)
+        {
+            case 0:
+                Widgets.TooltipText("Minimize to a small tab. Click the tab to bring the timeline back.", style.Scale);
+                break;
+            case 1:
+                Widgets.TooltipText("Hide the timeline. The Opener Timeline window (/opener) brings it back.", style.Scale);
+                break;
+        }
+
         if (ImGui.BeginPopup(MenuId))
         {
-            OverlayMenu.Draw(host, open, message => Plugin.Chat.Print("[Opener Timeline] " + message));
+            OverlayMenu.Draw(host, compact ? OverlayMenu.Origin.CompactStrip : OverlayMenu.Origin.FullPanel, open, Notify);
             ImGui.EndPopup();
         }
+    }
+
+    private static void Notify(string message)
+    {
+        Plugin.Chat.Print("[Opener Timeline] " + message);
+    }
+
+    private void SetPresence(TimelinePresence presence)
+    {
+        Settings.Presence = presence;
+        host.SaveSettings();
     }
 }

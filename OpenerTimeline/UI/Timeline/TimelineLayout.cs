@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 
 namespace OpenerTimeline.UI.Timeline;
 
@@ -48,6 +49,13 @@ public struct TimelineMetrics
     public float RailY;
 
     public float TotalHeight;
+}
+
+/// <summary>Where the overlay's two buttons sit, in screen coordinates. Both are squares of <see cref="Size"/>.</summary>
+public readonly record struct TimelineControls(Vector2 Minimize, Vector2 Hide, float Size)
+{
+    /// <summary>Left edge of the pair; text in the same band has to stop before it.</summary>
+    public float Left => Minimize.X;
 }
 
 /// <summary>Pure layout maths for the timeline, kept apart from drawing so it can be tested.</summary>
@@ -130,6 +138,41 @@ public static class TimelineLayout
         m.RulerTop = m.GcdChipTop + m.ChipHeight + (m.RulerHeight > 0f ? MathF.Round(3f * s) : 0f);
         m.TotalHeight = m.RulerTop + m.RulerHeight + m.Padding;
         return m;
+    }
+
+    /// <summary>
+    /// Places the minimize and hide buttons at the top right of an overlay spanning
+    /// <paramref name="min"/> to <paramref name="max"/>: in the header (or the compact view's
+    /// status line) when there is one, otherwise in the corner of the panel.
+    /// </summary>
+    public static TimelineControls Controls(in TimelineStyle style, in TimelineMetrics metrics, Vector2 min, Vector2 max)
+    {
+        var s = metrics.Scale;
+        var size = MathF.Round((style.Compact ? 16f : 18f) * s);
+        var gap = MathF.Round(3f * s);
+        var corner = MathF.Round(4f * s);
+
+        float right, top;
+        if (style.Compact)
+        {
+            right = max.X - corner;
+            top = metrics.StatusHeight > 0f
+                      ? min.Y + MathF.Round((metrics.StatusHeight - size) * 0.5f)
+                      : min.Y + metrics.PanelTop + corner;
+        }
+        else if (metrics.HeaderHeight > 0f)
+        {
+            right = max.X - metrics.Padding;
+            top = min.Y + metrics.Padding + MathF.Round((metrics.HeaderHeight - size) * 0.5f);
+        }
+        else
+        {
+            right = max.X - corner;
+            top = min.Y + corner;
+        }
+
+        var hide = new Vector2(MathF.Round(right - size), MathF.Round(top));
+        return new TimelineControls(hide with { X = hide.X - gap - size }, hide, size);
     }
 
     /// <summary>Assigns every step its column. Returns the width of the whole strip.</summary>

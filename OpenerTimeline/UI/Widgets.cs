@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using OpenerTimeline.Data;
@@ -42,9 +43,13 @@ public static class Widgets
 
     public static void Tooltip(string text, float scale)
     {
-        if (!ImGui.IsItemHovered())
-            return;
+        if (ImGui.IsItemHovered())
+            TooltipText(text, scale);
+    }
 
+    /// <summary>A tooltip regardless of what is hovered, for things that are not ImGui items.</summary>
+    public static void TooltipText(string text, float scale)
+    {
         ImGui.BeginTooltip();
         ImGui.PushTextWrapPos(340f * scale);
         ImGui.TextUnformatted(text);
@@ -103,7 +108,13 @@ public static class Widgets
         return clicked;
     }
 
-    /// <summary>A pill that can be switched on and off, for filters.</summary>
+    /// <summary>The width <see cref="Chip"/> gives a label.</summary>
+    public static float ChipWidth(string label, float scale)
+    {
+        return ImGui.CalcTextSize(VisibleLabel(label)).X + 24f * scale;
+    }
+
+    /// <summary>A pill that can be switched on and off, for filters and compact option rows.</summary>
     public static bool Chip(string label, bool active, Vector3 accent, float scale)
     {
         var text = VisibleLabel(label);
@@ -178,19 +189,35 @@ public static class Widgets
         return clicked;
     }
 
-    /// <summary>The window's top level navigation: one rounded bar, the selected section filled.</summary>
-    public static bool SegmentedTabs(string id, ReadOnlySpan<string> labels, ref int selected, Vector3 accent, float scale)
+    /// <summary>Height of <see cref="SegmentedTabs"/>.</summary>
+    public static float SegmentedHeight(float scale, bool small = false)
     {
-        var changed = false;
-        var padX = MathF.Round(16f * scale);
-        var inner = MathF.Round(3f * scale);
-        var height = MathF.Round(32f * scale);
-        var start = ImGui.GetCursorScreenPos();
-        var dl = ImGui.GetWindowDrawList();
+        return MathF.Round((small ? 26f : 32f) * scale);
+    }
 
-        var total = inner * 2f;
+    /// <summary>Width <see cref="SegmentedTabs"/> needs for these labels.</summary>
+    public static float SegmentedWidth(ReadOnlySpan<string> labels, float scale, bool small = false)
+    {
+        var padX = MathF.Round((small ? 11f : 16f) * scale);
+        var total = MathF.Round(3f * scale) * 2f;
         foreach (var label in labels)
             total += ImGui.CalcTextSize(label).X + padX * 2f;
+        return total;
+    }
+
+    /// <summary>
+    /// One rounded bar with the selected segment filled: the window's top level navigation, and
+    /// (small) any one-of-a-few choice that deserves to be seen at a glance.
+    /// </summary>
+    public static bool SegmentedTabs(string id, ReadOnlySpan<string> labels, ref int selected, Vector3 accent, float scale, bool small = false)
+    {
+        var changed = false;
+        var padX = MathF.Round((small ? 11f : 16f) * scale);
+        var inner = MathF.Round(3f * scale);
+        var height = SegmentedHeight(scale, small);
+        var start = ImGui.GetCursorScreenPos();
+        var dl = ImGui.GetWindowDrawList();
+        var total = SegmentedWidth(labels, scale, small);
 
         dl.AddRectFilled(start, start + new Vector2(total, height), Palette.Pack(Palette.White, 0.05f), height * 0.5f);
 
@@ -283,10 +310,108 @@ public static class Widgets
         return changed;
     }
 
+    /// <summary>
+    /// A heading that opens and closes what is under it, for options most people set once or
+    /// never. Returns whether it is open.
+    /// </summary>
+    public static bool Fold(string label, ref bool open, float scale)
+    {
+        var text = VisibleLabel(label);
+        var textSize = ImGui.CalcTextSize(text);
+        var arrow = MathF.Round(18f * scale);
+        var height = ImGui.GetFrameHeight();
+
+        ImGui.Dummy(new Vector2(0f, 2f * scale));
+        var pos = ImGui.GetCursorScreenPos();
+        if (ImGui.InvisibleButton(label, new Vector2(arrow + textSize.X + 8f * scale, height)))
+            open = !open;
+
+        var color = Palette.Pack(Palette.White, ImGui.IsItemHovered() ? Palette.TextAlpha : Palette.TextDimAlpha);
+        var dl = ImGui.GetWindowDrawList();
+        var center = new Vector2(MathF.Round(pos.X + arrow * 0.4f), MathF.Round(pos.Y + height * 0.5f));
+        var reach = 4f * scale;
+        if (open)
+        {
+            dl.AddTriangleFilled(center + new Vector2(-reach, -reach * 0.55f), center + new Vector2(reach, -reach * 0.55f),
+                                 center + new Vector2(0f, reach * 0.75f), color);
+        }
+        else
+        {
+            dl.AddTriangleFilled(center + new Vector2(-reach * 0.55f, -reach), center + new Vector2(reach * 0.75f, 0f),
+                                 center + new Vector2(-reach * 0.55f, reach), color);
+        }
+
+        dl.AddText(new Vector2(pos.X + arrow, MathF.Round(pos.Y + (height - textSize.Y) * 0.5f)), color, text);
+        return open;
+    }
+
     /// <summary>Strips the "##id" part ImGui uses for identity.</summary>
     private static string VisibleLabel(string label)
     {
         var marker = label.IndexOf("##", StringComparison.Ordinal);
         return marker >= 0 ? label[..marker] : label;
+    }
+}
+
+/// <summary>
+/// A row of chips that wraps onto further lines when it runs out of room. Several switches, or a
+/// pick-one choice, in the space one of them used to take.
+/// </summary>
+public ref struct ChipRow
+{
+    private readonly Vector3 accent;
+    private readonly float right;
+    private readonly float scale;
+    private int count;
+
+    /// <summary>Starts the row at the cursor; it may use the rest of the line.</summary>
+    public ChipRow(Vector3 accent, float scale)
+    {
+        this.accent = accent;
+        this.scale = scale;
+        right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
+        count = 0;
+
+        // Inside a group, wrapped lines start under the first chip instead of at the window edge.
+        ImGui.BeginGroup();
+    }
+
+    /// <summary>A chip that switches one setting on and off.</summary>
+    public bool Flag(string label, ref bool value)
+    {
+        Place(label);
+        if (!Widgets.Chip(label, value, accent, scale))
+            return false;
+
+        value = !value;
+        return true;
+    }
+
+    /// <summary>A chip that is lit while the setting has this value, and sets it when clicked.</summary>
+    public bool Choice<T>(string label, ref T current, T value) where T : struct, Enum
+    {
+        Place(label);
+        var selected = EqualityComparer<T>.Default.Equals(current, value);
+        if (!Widgets.Chip(label, selected, accent, scale) || selected)
+            return false;
+
+        current = value;
+        return true;
+    }
+
+    public void End()
+    {
+        ImGui.EndGroup();
+    }
+
+    /// <summary>Keeps the next chip on the line of the last one if it still fits there.</summary>
+    private void Place(string label)
+    {
+        if (count++ == 0)
+            return;
+
+        var needed = ImGui.GetStyle().ItemSpacing.X + Widgets.ChipWidth(label, scale);
+        if (ImGui.GetItemRectMax().X + needed <= right)
+            ImGui.SameLine();
     }
 }

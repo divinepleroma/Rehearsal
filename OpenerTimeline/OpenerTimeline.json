@@ -1,0 +1,23 @@
+{
+    "Author": "Fork of OpenerCreator by Infi, herulume, sevii",
+    "Name": "Opener Timeline",
+    "Punchline": "A live, HUD-style timeline for practising your opener.",
+    "Description": "Shows your opener as a single translucent line on your HUD and follows along as you play: the next action is highlighted, mistakes and skipped weaves are flagged the moment they happen, and each action shows the key it is bound to on your own hotbars. GCDs and oGCDs sit on separate lanes and one and two minute cooldowns are marked. Bundled openers are the ones published by The Balance; you can also build and save your own.\n\nA fork of OpenerCreator.",
+    "InternalName": "OpenerTimeline",
+    "ApplicableVersion": "any",
+    "RepoUrl": "https://github.com/Infiziert90/OpenerCreator",
+    "CategoryTags": [
+        "jobs"
+    ],
+    "Tags": [
+        "pve",
+        "rotation",
+        "opener",
+        "timeline",
+        "overlay",
+        "helper",
+        "jobs",
+        "combat",
+        "keybinds"
+    ]
+}

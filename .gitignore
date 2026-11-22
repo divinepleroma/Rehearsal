@@ -3,3 +3,15 @@ obj/
 bin/
 *.user
 .idea/
+artifacts/
+
+# Local-only files that must never be committed.
+.env
+.env.*
+*.pfx
+*.snk
+*.pem
+*.key
+*.suo
+.vscode/
+.claude/

@@ -1,0 +1,289 @@
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.IO;
+using System.Numerics;
+using Dalamud.Bindings.ImGui;
+using OpenerTimeline.Data;
+using OpenerTimeline.Training;
+using OpenerTimeline.UI;
+using OpenerTimeline.UI.Timeline;
+using OpenerTimeline.UI.Views;
+
+namespace OpenerTimeline.Preview;
+
+/// <summary>The live timeline in its different states and configurations.</summary>
+internal static class TimelineScenes
+{
+    private const double Start = 100d;
+
+    public static void Render(Stage stage, string path)
+    {
+        var rows = new List<Canvas>();
+        var scale = stage.Scale;
+        var catalog = stage.Host.Catalog;
+        var full = TimelineStyle.Default with { Scale = scale };
+        var compact = TimelineStyle.DefaultCompact with { Scale = scale };
+
+        var blm = Get(stage, Jobs.BLM, "Standard (The Balance)");
+        var dnc = Get(stage, Jobs.DNC, "Standard (The Balance)");
+        var mch = Get(stage, Jobs.MCH, "Standard (The Balance)");
+        var rdm = Get(stage, Jobs.RDM, "Standard (The Balance)");
+        var rdm90 = catalog.Adapt(rdm, 90).Actions;
+
+        // 1. Waiting for the pull: ruler under the GCDs, "GCD n" above the two minute cooldowns.
+        rows.Add(Scene(stage, "Full panel, armed: GCD numbers + estimated time, burst notes", new Point(250, 560), 1180, rdm90, "RDM",
+                       "Standard (The Balance)  -  Lv 90", full, _ => Start, null));
+
+        // 2. Gentle feedback: a slip that was corrected, a skipped weave, a cast, and a slip just now.
+        rows.Add(Scene(stage, "Running, gentle cue: wrong press 0.25s ago, earlier slip + skipped weave marked quietly", new Point(250, 560),
+                       1180, blm, "BLM", "Standard (The Balance)", full, session => PlayMessy(session, blm, catalog), frame =>
+                       {
+                           frame.CastProgress = 0.62f;
+                           frame.CastMatches = true;
+                       }));
+
+        // 3. The same moment with the loud style, for comparison.
+        rows.Add(Scene(stage, "Same moment, strong cue", new Point(250, 560), 1180, blm, "BLM", "Standard (The Balance)",
+                       full with { Feedback = FeedbackStyle.Strong }, session => PlayMessy(session, blm, catalog), frame =>
+                       {
+                           frame.CastProgress = 0.62f;
+                           frame.CastMatches = true;
+                       }));
+
+        // 4. Finished with mistakes, gentle style: back to full brightness for review.
+        rows.Add(Scene(stage, "Finished with mistakes (gentle): review", new Point(250, 560), 1180, blm, "BLM", "Standard (The Balance)", full,
+                       session =>
+                       {
+                           var t = Start;
+                           for (var i = 0; i < blm.Count; i++)
+                           {
+                               if (i == 3)
+                                   session.OnAction(154, false, false, t - 0.4);
+                               if (i != 7)
+                                   session.OnAction((uint)blm[i], false, false, t);
+                               t += catalog.IsGcd(blm[i]) ? 2.4 : 0.7;
+                           }
+
+                           return t + 2;
+                       }, null));
+
+        // 5. Compact strip, waiting.
+        rows.Add(Scene(stage, "Compact strip, armed (the action to press always sits in the same spot)", new Point(520, 610), 430, rdm90, "RDM",
+                       "Standard", compact, _ => Start, null));
+
+        // 6. Compact strip mid-run with a fresh slip.
+        rows.Add(Scene(stage, "Compact strip, running, wrong press just now", new Point(520, 610), 430, blm, "BLM", "Standard", compact,
+                       session => PlayMessy(session, blm, catalog), null));
+
+        // 7. Compact strip without key caps or status line: the smallest it gets.
+        rows.Add(Scene(stage, "Compact strip, no key caps, no status line", new Point(520, 300), 360, mch, "MCH", "Standard",
+                       compact with { ShowHints = false, ShowStatus = false, IconSize = 34f }, session =>
+                       {
+                           var t = Start;
+                           for (var i = 0; i < 5; i++)
+                           {
+                               session.OnAction((uint)mch[i], false, false, t);
+                               t += 1.2;
+                           }
+
+                           return t;
+                       }, null));
+
+        // 8. Flat full layout, countdown running.
+        rows.Add(Scene(stage, "Full panel, flat row, countdown running", new Point(560, 60), 1180, dnc, "DNC", "Standard (The Balance)",
+                       full with { Layout = TimelineLayoutMode.Inline }, _ => Start, frame => frame.Countdown = 4.2f));
+
+        // 9. Unlocked, narrow, gamepad hints.
+        rows.Add(Scene(stage, "Unlocked, narrow, gamepad hints", new Point(700, 560), 760, dnc, "DNC", "Standard (The Balance)",
+                       full with { HintStyle = KeybindStyle.Compact }, _ => Start, frame => frame.Unlocked = true, true));
+
+        Stage.Stack(rows).Save(path);
+        Console.WriteLine($"wrote {path}");
+    }
+
+    /// <summary>Nine steps in: one slip that was corrected, one weave forgotten, and a wrong press a moment ago.</summary>
+    private static double PlayMessy(TrainerSession session, List<int> actions, ActionCatalog catalog)
+    {
+        var t = Start;
+        for (var i = 0; i < 9; i++)
+        {
+            if (i == 7)
+                session.OnAction(154, false, false, t - 0.4); // Blizzard III first, then the right button
+            if (i == 6)
+                continue; // forgot this one
+            session.OnAction((uint)actions[i], false, false, t);
+            t += catalog.IsGcd(actions[i]) ? 2.4 : 0.7;
+        }
+
+        session.OnAction(3576, false, false, t - 0.25); // Blizzard IV, just now
+        return t;
+    }
+
+    private static List<int> Get(Stage stage, Jobs job, string name)
+    {
+        return stage.Host.Library.TryGet(new OpenerRef(job, name, true), out var actions)
+                   ? actions
+                   : throw new InvalidOperationException($"Opener not found: {job} {name}");
+    }
+
+    private static Canvas Scene(
+        Stage stage, string caption, Point backgroundOrigin, int overlayWidth, List<int> actions, string job, string title,
+        TimelineStyle style, Func<TrainerSession, double> play, Action<TimelineFrame>? tweak, bool gamepad = false)
+    {
+        var catalog = stage.Host.Catalog;
+        var session = new TrainerSession(actions, new ActionMatcher(catalog.GetName));
+        var now = play(session);
+
+        var frame = new TimelineFrame { Title = title, JobLabel = job, RunId = 1 };
+        var hints = new FakeHints(actions, gamepad);
+        new TimelineFrameBuilder(catalog).Build(frame, actions, session, hints.For, now);
+        tweak?.Invoke(frame);
+
+        var renderer = new TimelineRenderer();
+        var height = renderer.MeasureHeight(style);
+        var margin = (int)MathF.Round(34f * stage.Scale);
+        const int canvasWidth = 1280;
+        var canvasHeight = (int)height + margin * 2;
+
+        return stage.Render(canvasWidth, canvasHeight, backgroundOrigin, () =>
+        {
+            var dl = ImGui.GetBackgroundDrawList();
+            dl.AddText(new Vector2(14f, 6f), Palette.Pack(Palette.White, 0.85f), caption);
+            var pos = new Vector2(MathF.Round((canvasWidth - overlayWidth) * 0.5f), margin);
+            renderer.Render(dl, pos, new Vector2(overlayWidth, height), frame, style, stage.Host, 1f / 60f, 0.4);
+        });
+    }
+}
+
+/// <summary>The main window, one image per page, plus the timeline's menu.</summary>
+internal static class WindowScenes
+{
+    public static void Render(Stage stage, string outDir)
+    {
+        var host = stage.Host;
+        var scale = host.Scale;
+        var catalog = host.Catalog;
+
+        var trainer = new FakeTrainer(catalog, host.Library) { Level = 90 };
+        host.FakeTrainer = trainer;
+        host.CurrentJob = Jobs.RDM;
+
+        // One opener of the player's own, to show how saved entries look (a potion and a wildcard included).
+        host.Library.Save("Level 90 opener (mine)", Jobs.RDM, [25856, 25855, 7561, 25855, 7517, -100, 7518, 0, 25855, 7520, 7521, 7527, 7528]);
+        trainer.Select(new OpenerRef(Jobs.RDM, "Standard (The Balance)", true));
+
+        // A few attempts of varying quality for the results view.
+        trainer.Simulate(26, (session, actions) => Play(session, actions, catalog, actions.Count, null));
+        trainer.Simulate(19, (session, actions) => Play(session, actions, catalog, 11, null), FinishReason.TimedOut);
+        trainer.Simulate(11, (session, actions) => Play(session, actions, catalog, actions.Count, (i, t) =>
+        {
+            if (i == 4)
+                session.OnAction(7510, false, false, t - 0.3);
+            return i != 8;
+        }));
+        trainer.Simulate(3, (session, actions) => Play(session, actions, catalog, actions.Count, (i, t) =>
+        {
+            if (i == 12)
+                session.OnAction(7511, false, false, t - 0.3);
+            if (i == 16)
+                session.OnAction(7510, false, false, t - 0.3);
+            return i != 7 && i != 13;
+        }));
+
+        var view = new MainView(host);
+        var size = new Vector2(MathF.Round(940f * scale), MathF.Round(640f * scale));
+        const int margin = 28;
+        var width = (int)size.X + margin * 2;
+        var height = (int)size.Y + margin * 2;
+
+        void Page(string name, Action prepare, int frames = 4)
+        {
+            prepare();
+            var canvas = stage.Render(width, height, new Point(330, 150), () => DrawWindow(host, view, new Vector2(margin), size), frames);
+            var path = Path.Combine(outDir, $"window-{name}.png");
+            canvas.Save(path);
+            Console.WriteLine($"wrote {path}");
+        }
+
+        Page("openers", () => view.Show(MainView.Section.Openers));
+        Page("editor", () => view.Edit(new OpenerRef(Jobs.RDM, "Level 90 opener (mine)", false)));
+        Page("results", () => view.Show(MainView.Section.Results));
+        Page("settings-timeline", () => view.ShowSettings(SettingsView.Page.Timeline));
+        Page("settings-visibility", () => view.ShowSettings(SettingsView.Page.Visibility));
+        Page("settings-practice", () => view.ShowSettings(SettingsView.Page.Practice));
+        Page("settings-appearance", () => view.ShowSettings(SettingsView.Page.Appearance));
+        Page("guide-1-idea", () => view.ShowGuide(0), 12);
+        Page("guide-3-placing", () => view.ShowGuide(2), 12);
+        Page("guide-4-reading", () => view.ShowGuide(3), 6);
+        Page("guide-5-practising", () => view.ShowGuide(4), 12);
+        Page("guide-7-levels", () => view.ShowGuide(6), 6);
+
+        RenderMenu(stage, host, outDir);
+    }
+
+    /// <summary>The right-click menu of the timeline, opened over a compact strip.</summary>
+    private static void RenderMenu(Stage stage, PreviewHost host, string outDir)
+    {
+        var frameIndex = 0;
+        var canvas = stage.Render(520, 520, new Point(600, 400), () =>
+        {
+            using var theme = Theme.Push(host.Settings.Accent, 0.96f, host.Scale);
+            ImGui.SetNextWindowPos(new Vector2(20f, 20f));
+            ImGui.SetNextWindowSize(new Vector2(200f, 60f));
+            if (ImGui.Begin("##menuAnchor", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoSavedSettings))
+            {
+                if (frameIndex++ == 0)
+                    ImGui.OpenPopup("##overlayMenu");
+
+                ImGui.SetNextWindowPos(new Vector2(24f, 24f));
+                if (ImGui.BeginPopup("##overlayMenu"))
+                {
+                    OverlayMenu.Draw(host, _ => { }, _ => { });
+                    ImGui.EndPopup();
+                }
+            }
+
+            ImGui.End();
+        }, 4);
+
+        var path = Path.Combine(outDir, "menu.png");
+        canvas.Save(path);
+        Console.WriteLine($"wrote {path}");
+    }
+
+    private static void DrawWindow(PreviewHost host, MainView view, Vector2 pos, Vector2 size)
+    {
+        using var theme = Theme.Push(host.Settings.Accent, host.Settings.WindowOpacity, host.Scale);
+        ImGui.SetNextWindowPos(pos);
+        ImGui.SetNextWindowSize(size);
+
+        const ImGuiWindowFlags flags = ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoCollapse
+                                       | ImGuiWindowFlags.NoSavedSettings;
+        if (ImGui.Begin("Opener Timeline###main", flags))
+        {
+            var min = ImGui.GetWindowPos();
+            host.DrawBackdrop(ImGui.GetWindowDrawList(), min, min + ImGui.GetWindowSize(), ImGui.GetStyle().WindowRounding, host.Settings.Blur,
+                              1f);
+            view.Draw();
+        }
+
+        ImGui.End();
+    }
+
+    /// <summary>Presses the opener's buttons in order. The callback can add wrong presses and skip steps.</summary>
+    private static double Play(
+        TrainerSession session, IReadOnlyList<int> actions, ActionCatalog catalog, int count, Func<int, double, bool>? before)
+    {
+        var t = 100d;
+        for (var i = 0; i < count && i < actions.Count; i++)
+        {
+            var press = before?.Invoke(i, t) ?? true;
+            if (press)
+                session.OnAction((uint)actions[i], false, false, t);
+            t += catalog.IsGcd(actions[i]) ? 2.4 : 0.7;
+        }
+
+        return t;
+    }
+}

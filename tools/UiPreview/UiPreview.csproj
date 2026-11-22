@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+        Offline UI preview: renders the plugin's real drawing code to PNG files without the game
+        running. It links the Dalamud-free part of the plugin source and uses Dalamud's own ImGui
+        build, rasterising the draw data in software.
+
+        Needs a local Dalamud (for the ImGui binding) and a local game install (for icons and names).
+    -->
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0-windows</TargetFramework>
+        <PlatformTarget>x64</PlatformTarget>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>disable</ImplicitUsings>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <RootNamespace>OpenerTimeline.Preview</RootNamespace>
+        <IsPackable>false</IsPackable>
+        <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+        <DalamudLibPath Condition="'$(DalamudLibPath)' == ''">$(AppData)\XIVLauncher\addon\Hooks\dev\</DalamudLibPath>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Include="..\..\OpenerTimeline\Data\**\*.cs" Link="Plugin\Data\%(RecursiveDir)%(Filename)%(Extension)" />
+        <Compile Include="..\..\OpenerTimeline\Training\**\*.cs" Link="Plugin\Training\%(RecursiveDir)%(Filename)%(Extension)" />
+        <Compile Include="..\..\OpenerTimeline\UI\**\*.cs" Link="Plugin\UI\%(RecursiveDir)%(Filename)%(Extension)" />
+        <Compile Include="..\..\OpenerTimeline\Settings.cs" Link="Plugin\Settings.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Reference Include="Dalamud.Bindings.ImGui">
+            <HintPath>$(DalamudLibPath)Dalamud.Bindings.ImGui.dll</HintPath>
+        </Reference>
+        <Reference Include="HexaGen.Runtime">
+            <HintPath>$(DalamudLibPath)HexaGen.Runtime.dll</HintPath>
+        </Reference>
+        <Reference Include="Lumina">
+            <HintPath>$(DalamudLibPath)Lumina.dll</HintPath>
+        </Reference>
+        <Reference Include="Lumina.Excel">
+            <HintPath>$(DalamudLibPath)Lumina.Excel.dll</HintPath>
+        </Reference>
+        <None Include="$(DalamudLibPath)cimgui.dll" Link="cimgui.dll" CopyToOutputDirectory="PreserveNewest" />
+        <PackageReference Include="System.Drawing.Common" Version="10.0.0" />
+    </ItemGroup>
+
+</Project>

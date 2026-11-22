@@ -1,0 +1,41 @@
+[
+    {
+        "Author": "divinepleroma (based on OpenerCreator by Infi, herulume, sevii)",
+        "Name": "Rehearsal",
+        "InternalName": "Rehearsal",
+        "AssemblyVersion": "0.2.0.0",
+        "Punchline": "Practise your opener: a small live timeline on your HUD that follows what you press.",
+        "Description": "Puts your opener on your HUD as a small strip that scrolls along as you play: the action to press next is ringed and shows the key it is bound to on your own hotbars, a wrong press or a skipped weave is marked the moment it happens, and one and two minute cooldowns are badged. Nothing to start or stop - press the first action and the attempt begins. A full two-lane panel with GCD numbers and times is there when you want to study the plan, and the whole thing minimizes to a tab or hides with one click.\n\nA short setup walks you through the choices on first start. Bundled openers are the ones published by The Balance; you can build and save your own. It only watches your own actions: it never presses anything and sends nothing anywhere.\n\nBased on OpenerCreator.",
+        "Changelog": "First release as Rehearsal. The small strip is the default view, a five-step setup opens on first start, and the timeline can be minimized to a tab or hidden from the HUD.",
+        "ApplicableVersion": "any",
+        "RepoUrl": "https://github.com/divinepleroma/Rehearsal",
+        "IconUrl": "https://divinepleroma.github.io/Rehearsal/img/icon.png",
+        "Tags": [
+            "pve",
+            "rotation",
+            "opener",
+            "practice",
+            "timeline",
+            "overlay",
+            "helper",
+            "jobs",
+            "combat",
+            "keybinds"
+        ],
+        "CategoryTags": [
+            "jobs"
+        ],
+        "DalamudApiLevel": 15,
+        "LoadRequiredState": 0,
+        "LoadSync": false,
+        "CanUnloadAsync": false,
+        "LoadPriority": 0,
+        "IsHide": false,
+        "IsTestingExclusive": false,
+        "DownloadCount": 0,
+        "LastUpdate": 1795376337,
+        "DownloadLinkInstall": "https://github.com/divinepleroma/Rehearsal/releases/download/v0.2.0/latest.zip",
+        "DownloadLinkUpdate": "https://github.com/divinepleroma/Rehearsal/releases/download/v0.2.0/latest.zip",
+        "DownloadLinkTesting": "https://github.com/divinepleroma/Rehearsal/releases/download/v0.2.0/latest.zip"
+    }
+]

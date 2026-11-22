@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#0d1017">
+    <title>Rehearsal: practise your FFXIV opener on your HUD</title>
+    <meta name="description" content="A Dalamud plugin for FINAL FANTASY XIV. Your opener as a small strip on your HUD that follows what you press: the next action ringed with its key, a wrong press marked the moment it happens.">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Rehearsal: practise your opener on your HUD">
+    <meta property="og:description" content="A Dalamud plugin for FINAL FANTASY XIV. Your opener as a small strip that follows what you press. One URL to install, a short setup, sensible defaults.">
+    <meta property="og:url" content="https://divinepleroma.github.io/Rehearsal/">
+    <meta property="og:image" content="https://divinepleroma.github.io/Rehearsal/img/og.jpg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="icon" type="image/png" href="img/icon.png">
+    <link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#install">Skip to install</a>
+
+<header class="top">
+    <div class="wrap top-row">
+        <a class="brand" href="#top" aria-label="Rehearsal, top of page">
+            <img src="img/icon.png" width="28" height="28" alt="">
+            <span>Rehearsal</span>
+        </a>
+        <nav aria-label="Sections">
+            <a href="#install">Install</a>
+            <a href="#first-run">First run</a>
+            <a href="#features">What it does</a>
+            <a href="#faq">Questions</a>
+            <a href="https://github.com/divinepleroma/Rehearsal" rel="noopener">Source</a>
+        </nav>
+    </div>
+</header>
+
+<main id="top">
+    <section class="hero">
+        <div class="wrap">
+            <p class="eyebrow">A Dalamud plugin for FINAL FANTASY XIV</p>
+            <h1>Practise your opener until your hands know it.</h1>
+            <p class="lede">Rehearsal puts your opener on your HUD as a small strip and follows along while you play. The action to press next is ringed, with the key it is bound to on <em>your</em> hotbars underneath. Press the wrong thing, or skip a weave, and it is marked the moment it happens.</p>
+            <div class="cta">
+                <a class="button primary" href="#install">Install it</a>
+                <a class="button" href="#first-run">See the first run</a>
+            </div>
+
+            <figure class="stage">
+                <div class="flip" role="img" aria-label="The compact strip stepping through a Red Mage opener: each press slides the icons one place to the left, the next action stays ringed in the same spot, and one wrong press is marked beside it."></div>
+                <figcaption>The compact strip, playing a Red Mage opener. Nothing to start: the first press begins the attempt. Watch for the one wrong press.</figcaption>
+            </figure>
+        </div>
+    </section>
+
+    <section id="install" class="band">
+        <div class="wrap">
+            <h2>Install in a minute</h2>
+            <p class="sub">You need the game started through <a href="https://goatcorp.github.io/" rel="noopener">XIVLauncher</a> with Dalamud enabled. Then it is three steps in game.</p>
+
+            <ol class="install">
+                <li>
+                    <h3>Copy this address</h3>
+                    <div class="copy">
+                        <label class="visually-hidden" for="repo-url">Plugin repository address</label>
+                        <input id="repo-url" type="text" readonly spellcheck="false" value="https://divinepleroma.github.io/Rehearsal/repo.json">
+                        <button type="button" data-copy="repo-url">Copy</button>
+                    </div>
+                </li>
+                <li>
+                    <h3>Add it to Dalamud</h3>
+                    <p>Type <kbd>/xlsettings</kbd> in chat, open <b>Experimental</b>, and paste the address into an empty line under <b>Custom Plugin Repositories</b>. Press the <b>+</b>, then <b>Save and Close</b>.</p>
+                </li>
+                <li>
+                    <h3>Install Rehearsal</h3>
+                    <p>Type <kbd>/xlplugins</kbd>, search for <b>Rehearsal</b> and press <b>Install</b>. A short setup opens by itself.</p>
+                </li>
+            </ol>
+            <p class="note">Updates arrive through the same plugin installer. To remove it, uninstall it there; the address can stay or go.</p>
+        </div>
+    </section>
+
+    <section id="first-run" class="band alt">
+        <div class="wrap">
+            <h2>First run: five choices, all already made</h2>
+            <p class="sub">The setup opens on its own the first time. Every step shows a timeline that plays itself and changes as you click, so you see what a choice does before you make it. Pressing <b>Next</b> five times is a perfectly good way through; so is <b>Skip setup</b>.</p>
+
+            <div class="steps">
+                <input type="radio" name="step" id="step-1" checked>
+                <input type="radio" name="step" id="step-2">
+                <input type="radio" name="step" id="step-3">
+                <input type="radio" name="step" id="step-4">
+                <input type="radio" name="step" id="step-5">
+
+                <div class="step-tabs">
+                    <label for="step-1"><span>1</span> Pick your view</label>
+                    <label for="step-2"><span>2</span> When it appears</label>
+                    <label for="step-3"><span>3</span> Mistakes</label>
+                    <label for="step-4"><span>4</span> Look</label>
+                    <label for="step-5"><span>5</span> Place it</label>
+                </div>
+
+                <div class="step-panels">
+                    <figure class="step-panel">
+                        <img src="img/setup-1.jpg" width="1428" height="978" alt="Setup step 1. A small strip plays above three choices: Compact strip (selected), Full panel, Automatic. Below, chips switch key caps, cooldown markers, the status line and the progress bar, and a slider sets the icon size.">
+                        <figcaption><b>Pick your view.</b> The compact strip is selected: a small row that scrolls sideways and keeps the action to press in one spot. The full panel shows the whole plan; Automatic gives you the panel before the pull and the strip once you start. Switch off any part you do not look at.</figcaption>
+                    </figure>
+                    <figure class="step-panel">
+                        <img src="img/setup-2.jpg" width="1428" height="978" loading="lazy" alt="Setup step 2. Chips for when the timeline comes up before the pull: Targeting a dummy and In a trial or raid are on, Targeting any enemy and Always are off. A second row picks where openers are followed: open world, trials, raids and ultimates are on.">
+                        <figcaption><b>When it appears.</b> At a striking dummy and inside trials and raids, and otherwise out of sight. Whatever you pick, it appears the moment you press your opener's first action and leaves again shortly after the result.</figcaption>
+                    </figure>
+                    <figure class="step-panel">
+                        <img src="img/setup-3.jpg" width="1428" height="978" loading="lazy" alt="Setup step 3. Three choices for a wrong press: a gentle cue (selected), a strong cue, or nothing while playing. Below, an optional sound and two rules: stop at the first mistake (off) and ignore Sprint and role actions (on).">
+                        <figcaption><b>Mistakes.</b> The gentle cue warms the ring for a moment and shows what you pressed, small, beside the step. Nothing moves and nothing is covered, so you keep going. The example slips once and forgets a weave to show you.</figcaption>
+                    </figure>
+                    <figure class="step-panel">
+                        <img src="img/setup-4.jpg" width="1428" height="978" loading="lazy" alt="Setup step 4. Five looks as cards: Acrylic (selected), Glass, Smoke, Solid and Ghost, and a row of twelve accent colours.">
+                        <figcaption><b>Look.</b> Five looks from frosted glass to barely there, and an accent colour. They apply to the timeline and to the plugin window.</figcaption>
+                    </figure>
+                    <figure class="step-panel">
+                        <img src="img/setup-5.jpg" width="1428" height="978" loading="lazy" alt="Setup step 5. Text explains that the timeline is now on screen with a coloured outline to be dragged into place, followed by four notes for later. The button reads: Finish and lock it in place.">
+                        <figcaption><b>Place it.</b> Only now is the timeline unlocked: drag it near your hotbars or cast bar, drag its right edge for width, and finish. From then on it ignores the mouse and you click straight through it.</figcaption>
+                    </figure>
+                </div>
+            </div>
+
+            <p class="note">Nothing here is final. Everything is on the Settings tab afterwards, and <kbd>/rehearsal setup</kbd> runs the five steps again from what you have.</p>
+        </div>
+    </section>
+
+    <section id="features" class="band">
+        <div class="wrap">
+            <h2>What it does</h2>
+
+            <div class="feature">
+                <div class="feature-text">
+                    <h3>Shows what to press, and with which key</h3>
+                    <p>The next action is ringed and always sits in the same spot; what you have done slides away to the left. Under each action is the key it is bound to on your own hotbars, read live from your keybinds. An amber dash means the action is not on any hotbar yet.</p>
+                    <p>One minute cooldowns carry a teal badge, two minute cooldowns a gold one, each with its real recast.</p>
+                </div>
+                <figure><img src="img/strip-ready.jpg" width="750" height="231" loading="lazy" alt="The compact strip waiting for the pull: nine action icons in a row, the first ringed in blue with a filled key cap reading 1, the others with their keys underneath and small 60 and 120 badges on the cooldowns."></figure>
+            </div>
+
+            <div class="feature flipped">
+                <div class="feature-text">
+                    <h3>Notes a mistake without stopping you</h3>
+                    <p>A wrong press warms the ring and shows what you hit, small, beside the step. A skipped weave is marked and the timeline jumps ahead with you instead of getting stuck. Afterwards the Results tab has every attempt, step by step.</p>
+                    <p>Sprint and role actions that are not part of the opener never count against you.</p>
+                </div>
+                <figure><img src="img/strip-slip.jpg" width="750" height="231" loading="lazy" alt="The compact strip mid-run on Black Mage: the ringed action has a small wrong icon beside it, and two earlier steps carry a small dot and a dash for a slip and a skipped weave."></figure>
+            </div>
+
+            <figure class="wide">
+                <img src="img/panel-running.jpg" width="1770" height="390" loading="lazy" alt="The full panel mid-run: global cooldowns on a line, abilities raised and smaller between them, key caps under every action, GCD numbers with estimated times underneath, and notes such as GCD 5 above the two minute cooldowns.">
+                <figcaption><b>The full panel, when you want the whole plan.</b> GCDs on the line, oGCDs raised between the GCDs they are woven into. Under each GCD: which one it is and roughly when it happens at your own GCD speed. Above your two minute cooldowns: the GCD they go out on, so you can see whether your buffs line up with the party.</figcaption>
+            </figure>
+
+            <div class="feature">
+                <div class="feature-text">
+                    <h3>Gets out of the way</h3>
+                    <p>Locked, it is click-through like the rest of your HUD. Hold <kbd>Ctrl</kbd>+<kbd>Shift</kbd> and two small buttons appear: one minimizes it to a tab that shows where the run stands, the other hides it. A click on the tab brings it back.</p>
+                    <p>The same shown, minimized or hidden switch sits at the top of the plugin window, so a hidden timeline is never lost.</p>
+                </div>
+                <figure class="stack">
+                    <img src="img/strip-buttons.jpg" width="750" height="231" loading="lazy" alt="The compact strip with an outline and two small buttons at its top right, minimize and hide.">
+                    <img src="img/tabs.jpg" width="780" height="126" loading="lazy" alt="The minimized tab in four states: BLM READY, BLM PULL IN 4.2, BLM 9 of 24, and BLM 24 of 24 CLEAN RUN.">
+                </figure>
+            </div>
+
+            <figure class="wide">
+                <img src="img/openers.jpg" width="1428" height="978" loading="lazy" alt="The Openers tab: a list of Red Mage openers, each with its icons in order, how many actions and GCDs it has, and Practice and Edit buttons. A switch at the top right reads Shown, Minimized, Hidden.">
+                <figcaption><b>Comes with openers, takes your own.</b> Every job starts with the openers published by <a href="https://www.thebalanceffxiv.com/" rel="noopener">The Balance</a>. Build your own in the editor: search, click to add, drag to reorder. Below the level an opener was written for, it is fitted to the actions you actually have. Openers you saved in OpenerCreator are brought over on first start; the originals are left alone.</figcaption>
+            </figure>
+
+            <h3 class="more">More of it</h3>
+            <div class="gallery">
+                <figure>
+                    <a href="img/results.jpg"><img src="img/results.jpg" width="1428" height="978" loading="lazy" alt="The Results tab: a list of attempts with accuracy and time, and the selected attempt broken down step by step."></a>
+                    <figcaption><b>Results.</b> Every attempt of the session, step by step.</figcaption>
+                </figure>
+                <figure>
+                    <a href="img/editor.jpg"><img src="img/editor.jpg" width="1428" height="978" loading="lazy" alt="The Editor tab: the opener being built as a row of icons, above a searchable list of the job's actions."></a>
+                    <figcaption><b>Editor.</b> Search, click to add, drag to reorder.</figcaption>
+                </figure>
+                <figure>
+                    <a href="img/settings.jpg"><img src="img/settings.jpg" width="1428" height="978" loading="lazy" alt="The Settings tab on its Timeline page: rows of chips for the view and for the parts of each view, and two drop-downs for markers."></a>
+                    <figcaption><b>Settings.</b> Three pages; related switches share a row.</figcaption>
+                </figure>
+                <figure>
+                    <a href="img/guide.jpg"><img src="img/guide.jpg" width="1428" height="978" loading="lazy" alt="The Guide tab on its Reading it page: small illustrations of the two lanes, key caps, cooldown badges and slip marks, each explained beside it."></a>
+                    <figcaption><b>Guide.</b> What every mark on the timeline means.</figcaption>
+                </figure>
+                <figure>
+                    <img src="img/strip-bare.jpg" width="660" height="161" loading="lazy" alt="The compact strip with key caps and status line switched off: just a short row of icons with cooldown badges.">
+                    <figcaption><b>As small as you like.</b> No key caps, no status line.</figcaption>
+                </figure>
+                <figure>
+                    <img src="img/strip-countdown.jpg" width="750" height="231" loading="lazy" alt="The compact strip during a countdown, its status line reading PULL IN 4.2.">
+                    <figcaption><b>A practice countdown</b> for timing the pre-pull, visible only to you.</figcaption>
+                </figure>
+            </div>
+        </div>
+    </section>
+
+    <section class="band alt">
+        <div class="wrap two">
+            <div>
+                <h2>Out of the box</h2>
+                <ul class="defaults">
+                    <li><b>The small strip</b>, with key caps, cooldown badges and a status line.</li>
+                    <li><b>Locked</b>: it ignores the mouse until you unlock it.</li>
+                    <li><b>There when you are about to pull</b>: at a striking dummy, inside trials and raids, and the moment you press the first action.</li>
+                    <li><b>Quiet</b>: a gentle cue on a wrong press, no sound, nothing highlighted on your hotbars.</li>
+                    <li><b>Follows</b> the open world, trials, raids and ultimates; dungeons and alliance raids are off.</li>
+                    <li><b>Fitted to your level</b> when you are below what an opener needs.</li>
+                </ul>
+                <p class="note">All of it can be changed: three settings pages, with the set-once sliders folded away.</p>
+            </div>
+            <div>
+                <h2>Commands</h2>
+                <p class="sub">None are needed; they are handy in macros.</p>
+                <table class="commands">
+                    <tbody>
+                    <tr><th scope="row"><kbd>/rehearsal</kbd></th><td>Open the plugin window</td></tr>
+                    <tr><th scope="row"><kbd>/rehearsal setup</kbd></th><td>Run the first-run setup again</td></tr>
+                    <tr><th scope="row"><kbd>/rehearsal show</kbd> <kbd>min</kbd> <kbd>hide</kbd></th><td>Show the timeline, minimize it to a tab, or hide it</td></tr>
+                    <tr><th scope="row"><kbd>/rehearsal unlock</kbd> <kbd>lock</kbd></th><td>Free the timeline to move it, or pin it</td></tr>
+                    <tr><th scope="row"><kbd>/rehearsal view</kbd> <kbd>compact</kbd> <kbd>full</kbd> <kbd>auto</kbd></th><td>Switch views</td></tr>
+                    <tr><th scope="row"><kbd>/rehearsal cd</kbd></th><td>Start a private practice countdown</td></tr>
+                    <tr><th scope="row"><kbd>/rehearsal reset</kbd></th><td>Abandon the current attempt</td></tr>
+                    </tbody>
+                </table>
+                <p class="note"><kbd>/opener</kbd> works as a shorter <kbd>/rehearsal</kbd> when no other plugin uses it.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="faq" class="band">
+        <div class="wrap narrow">
+            <h2>Questions</h2>
+
+            <details>
+                <summary>Does it press anything for me?</summary>
+                <p>No. It draws a timeline and watches which of your own actions go off. It never uses an action, never sends chat or commands, and makes no network connections. It is a practice aid, not a rotation helper.</p>
+            </details>
+            <details>
+                <summary>Is it allowed?</summary>
+                <p>Like every Dalamud plugin it is a third-party tool, and the game's terms of service do not permit those. Rehearsal only draws on your own screen and changes nothing about the game or anyone else's experience. Use your own judgement, and do not talk about plugins in game.</p>
+            </details>
+            <details>
+                <summary>Where do the openers and the numbers come from?</summary>
+                <p>The bundled sequences are The Balance's, transcribed by hand and inherited from OpenerCreator. Times and GCD numbers are worked out from the game's own data and your current GCD speed, assuming the GCD keeps rolling: a plan, not a simulation.</p>
+            </details>
+            <details>
+                <summary>Does it work with a controller?</summary>
+                <p>Yes. In gamepad mode the key caps show cross hotbar positions instead of keys, with either LT/RT or L2/R2 labels.</p>
+            </details>
+            <details>
+                <summary>I am level synced, or still levelling. Does it still help?</summary>
+                <p>Yes. Actions you have not learned are left out and upgraded ones fall back to the version you have. It is an approximation; for content you care about, save the opener you actually want for that level, and it is remembered for that level cap.</p>
+            </details>
+            <details>
+                <summary>How do I move it after the setup?</summary>
+                <p><kbd>/rehearsal unlock</kbd>, or the Lock switch under Settings. It gets a coloured outline; drag it, then lock it again.</p>
+            </details>
+            <details>
+                <summary>I use OpenerCreator. Do they clash?</summary>
+                <p>No. They have their own names, commands and settings and can be installed side by side. Rehearsal reads your saved OpenerCreator openers once and leaves them untouched.</p>
+            </details>
+        </div>
+    </section>
+</main>
+
+<footer class="foot">
+    <div class="wrap">
+        <p>Rehearsal is based on <a href="https://github.com/Infiziert90/OpenerCreator" rel="noopener">OpenerCreator</a> by Infi, herulume and sevii, rebuilt around a live timeline. Openers by <a href="https://www.thebalanceffxiv.com/" rel="noopener">The Balance</a>. Free software under the <a href="https://github.com/divinepleroma/Rehearsal/blob/main/LICENSE.md" rel="noopener">AGPL-3.0-or-later</a>; the <a href="https://github.com/divinepleroma/Rehearsal" rel="noopener">source</a> and the <a href="https://github.com/divinepleroma/Rehearsal/issues" rel="noopener">issue tracker</a> are on GitHub.</p>
+        <p class="legal">FINAL FANTASY XIV &copy; SQUARE ENIX CO., LTD. Action icons shown are from the game. Rehearsal is not affiliated with or endorsed by Square Enix. The screenshots are rendered from the plugin's own code over painted scenery, with made-up keybinds.</p>
+    </div>
+</footer>
+
+<script src="site.js"></script>
+</body>
+</html>
